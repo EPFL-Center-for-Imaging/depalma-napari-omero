@@ -30,10 +30,10 @@ jobs:
       
       - name: Build executable for Windows
         env:
-          PYAPP_PROJECT_NAME: depalma_napari_omero
-          PYAPP_PROJECT_VERSION: ${{ github.ref }}
+          PYAPP_PROJECT_NAME: 'depalma_napari_omero'
+          PYAPP_PROJECT_VERSION: '0.1'
           PYAPP_PYTHON_VERSION: '3.9'
-          PYAPP_EXEC_SCRIPT: pyapp/requirements.w64.txt
+          PYAPP_EXEC_SCRIPT: 'pyapp/requirements.txt'
         run: cargo build --release
         working-directory: pyapp/pyapp-latest
 
@@ -44,10 +44,10 @@ jobs:
       - name: Build executable for Linux
         if: runner.os == 'Linux'
         env:
-          PYAPP_PROJECT_NAME: depalma_napari_omero
-          PYAPP_PROJECT_VERSION: ${{ github.ref }}
+          PYAPP_PROJECT_NAME: 'depalma_napari_omero'
+          PYAPP_PROJECT_VERSION: '0.1'
           PYAPP_PYTHON_VERSION: '3.9'
-          PYAPP_EXEC_SCRIPT: pyapp/requirements.txt
+          PYAPP_EXEC_SCRIPT: 'pyapp/requirements.txt'
         run: cargo build --release
         working-directory: pyapp/pyapp-latest
 
