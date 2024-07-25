@@ -14,7 +14,16 @@ script_directory = Path(__file__).parent
 os.environ['PYAPP_PROJECT_NAME'] = __name__
 os.environ['PYAPP_PROJECT_VERSION'] = __version__
 os.environ['PYAPP_EXEC_SCRIPT'] = str((script_directory.parent / 'src' / __name__ / '__main__.py').resolve())
-os.environ['PYAPP_PROJECT_DEPENDENCY_FILE'] = str((script_directory.parent / 'requirements.txt').resolve())
+if os.name == 'nt':
+    print("Building for Windows.")
+    extension = '.exe'  # Windows
+    platform = 'w64'
+    os.environ['PYAPP_PROJECT_DEPENDENCY_FILE'] = str((script_directory / 'requirements.w64.txt').resolve())
+else:
+    print("Building for Linux / MacOS.")
+    extension = ''  # Linux and MacOS
+    platform = 'u64'
+    os.environ['PYAPP_PROJECT_DEPENDENCY_FILE'] = str((script_directory / 'requirements.txt').resolve())
 
 # Print them
 print(f"{os.environ['PYAPP_PROJECT_NAME']=}")
@@ -26,13 +35,6 @@ print(f"{os.environ['PYAPP_PROJECT_DEPENDENCY_FILE']=}")
 os.chdir(str(script_directory / 'pyapp-latest'))
 subprocess.run(['cargo', 'build', '--release'], capture_output=True, text=True)
 os.chdir(str(script_directory))
-
-if os.name == 'nt':
-    extension = '.exe'  # Windows
-    platform = 'w64'
-else:
-    extension = ''  # Linux and MacOS
-    platform = 'u64'
 
 source_path = str((script_directory / 'pyapp-latest' / 'target' / 'release' / f'pyapp{extension}').resolve())
 destination_path = str((script_directory.parent / 'release' / f'{__name__}_{platform}_{__version__}{extension}').resolve())
