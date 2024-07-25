@@ -48,6 +48,12 @@ To update the project to the latest version, force the reinstallation of the `de
 pip install --force-reinstall git+https://gitlab.com/epfl-center-for-imaging/depalma.git
 ```
 
+## Build with PyApp
+
+```
+python pyapp/build.py
+```
+
 ## Related projects
 
 - [JupyterHub (De Palma)](https://gitlab.com/epfl-center-for-imaging/depalma-jupyterhub)

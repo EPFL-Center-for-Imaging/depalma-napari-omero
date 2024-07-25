@@ -120,3 +120,5 @@ src/scripts/.env
 notebooks/
 
 .vscode/
+
+release/

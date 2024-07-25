@@ -1,0 +1,116 @@
+name: Test
+
+on:
+  push:
+    branches:
+    - master
+  pull_request:
+    branches:
+    - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  STABLE_PYTHON_VERSION: "3.11"
+
+jobs:
+  test:
+    name: ${{ matrix.job.target }} (${{ matrix.job.os }})
+    runs-on: ${{ matrix.job.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+        # Linux
+        - target: aarch64-unknown-linux-gnu
+          os: ubuntu-22.04
+          cross: true
+        - target: x86_64-unknown-linux-gnu
+          os: ubuntu-22.04
+          cross: true
+          test: true
+          validate: true
+        - target: x86_64-unknown-linux-musl
+          os: ubuntu-22.04
+          cross: true
+        - target: i686-unknown-linux-gnu
+          os: ubuntu-22.04
+          cross: true
+          python_version: "3.11"
+        - target: powerpc64le-unknown-linux-gnu
+          os: ubuntu-22.04
+          cross: true
+        # Windows
+        - target: x86_64-pc-windows-msvc
+          os: windows-2022
+          test: true
+        - target: i686-pc-windows-msvc
+          os: windows-2022
+        # macOS
+        - target: aarch64-apple-darwin
+          os: macos-14
+          test: true
+        - target: x86_64-apple-darwin
+          os: macos-12
+          test: true
+
+    env:
+      CARGO: cargo
+      CARGO_BUILD_TARGET: "${{ matrix.job.target }}"
+      PYAPP_PROJECT_NAME: cowsay
+      PYAPP_PROJECT_VERSION: "5.0.0"
+      PYAPP_PYTHON_VERSION: "${{ matrix.job.python_version }}"
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ env.STABLE_PYTHON_VERSION }}
+      if: matrix.job.validate
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.STABLE_PYTHON_VERSION }}
+
+    - name: Validate
+      if: matrix.job.validate
+      run: python scripts/validate_options.py
+
+    - name: Set up cross compiling
+      if: matrix.job.cross
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cross
+
+    - name: Configure cross compiling
+      if: matrix.job.cross
+      run: echo "CARGO=cross" >> $GITHUB_ENV
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.job.target }}
+        components: clippy, rustfmt
+
+    - name: Lint
+      run: $CARGO clippy --no-deps
+
+    - name: Format
+      if: matrix.job.validate
+      run: cargo fmt --check
+
+    - name: See dependency tree
+      run: $CARGO tree
+
+    - name: Build
+      if: ${{ !matrix.job.test }}
+      run: $CARGO build
+
+    - name: Test
+      if: matrix.job.test
+      run: cargo run -- Moo Success!

@@ -1,0 +1,86 @@
+[package]
+name = "pyapp"
+version = "0.22.0"
+description = "Runtime installer for Python applications"
+repository = "https://github.com/ofek/pyapp"
+documentation = "https://ofek.dev/pyapp/"
+license = "Apache-2.0 OR MIT"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.86"
+base64 = "0.22.1"
+bzip2 = "0.4.4"
+clap = { version = "4.5.4", features = ["derive"] }
+directories = "5.0.1"
+flate2 = "1.0.30"
+fs4 = { version = "0.8.3", features = ["sync"] }
+indicatif = { version = "0.17.8", features = ["improved_unicode"] }
+once_cell = "1.19.0"
+os_pipe = "1.1.5"
+reqwest = { version = "0.12.4", features = ["blocking", "rustls-tls"], default-features = false }
+tar = "0.4.40"
+tempfile = "3.10.1"
+zip = "2.1.0"
+zstd = "0.13.1"
+
+[build-dependencies]
+base64 = "0.22.1"
+flate2 = "1.0.30"
+highway = "1.0.0"
+rand = "0.8.5"
+regex = "1.8.1"
+reqwest = { version = "0.12.4", features = ["blocking", "rustls-tls"], default-features = false }
+tar = "0.4.40"
+zip = "2.1.0"
+
+[profile.release]
+panic = "abort"
+strip = true
+codegen-units = 1
+
+[package.metadata.cross.build.env]
+passthrough = [
+  "PYAPP_ALLOW_UPDATES",
+  "PYAPP_DISTRIBUTION_EMBED",
+  "PYAPP_DISTRIBUTION_FORMAT",
+  "PYAPP_DISTRIBUTION_PATH",
+  "PYAPP_DISTRIBUTION_PATH_PREFIX",
+  "PYAPP_DISTRIBUTION_PIP_AVAILABLE",
+  "PYAPP_DISTRIBUTION_PYTHON_PATH",
+  "PYAPP_DISTRIBUTION_SITE_PACKAGES_PATH",
+  "PYAPP_DISTRIBUTION_SOURCE",
+  "PYAPP_DISTRIBUTION_VARIANT",
+  "PYAPP_EXEC_CODE",
+  "PYAPP_EXEC_MODULE",
+  "PYAPP_EXEC_NOTEBOOK",
+  "PYAPP_EXEC_SCRIPT",
+  "PYAPP_EXEC_SPEC",
+  "PYAPP_EXPOSE_ALL_COMMANDS",
+  "PYAPP_EXPOSE_CACHE",
+  "PYAPP_EXPOSE_METADATA",
+  "PYAPP_EXPOSE_PIP",
+  "PYAPP_EXPOSE_PYTHON",
+  "PYAPP_EXPOSE_PYTHON_PATH",
+  "PYAPP_EXPOSE_UPDATE",
+  "PYAPP_FULL_ISOLATION",
+  "PYAPP_IS_GUI",
+  "PYAPP_METADATA_TEMPLATE",
+  "PYAPP_PASS_LOCATION",
+  "PYAPP_PIP_ALLOW_CONFIG",
+  "PYAPP_PIP_EXTERNAL",
+  "PYAPP_PIP_EXTRA_ARGS",
+  "PYAPP_PIP_VERSION",
+  "PYAPP_PROJECT_DEPENDENCY_FILE",
+  "PYAPP_PROJECT_FEATURES",
+  "PYAPP_PROJECT_NAME",
+  "PYAPP_PROJECT_PATH",
+  "PYAPP_PROJECT_VERSION",
+  "PYAPP_PYTHON_VERSION",
+  "PYAPP_SELF_COMMAND",
+  "PYAPP_SKIP_INSTALL",
+  "PYAPP_UPGRADE_VIRTUALENV",
+  "PYAPP_UV_ENABLED",
+  "PYAPP_UV_ONLY_BOOTSTRAP",
+  "PYAPP_UV_VERSION",
+]
