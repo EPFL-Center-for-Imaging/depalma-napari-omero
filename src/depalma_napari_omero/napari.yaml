@@ -1,0 +1,10 @@
+name: depalma-napari-omero
+display_name: De Palma lab
+contributions:
+  commands:
+    - id: depalma-napari-omero.start
+      title: OMERO interface
+      python_name: depalma_napari_omero.omero_widget:OMEROWidget
+  widgets:
+    - command: depalma-napari-omero.start
+      display_name: OMERO interface
