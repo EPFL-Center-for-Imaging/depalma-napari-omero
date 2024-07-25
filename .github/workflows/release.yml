@@ -22,10 +22,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       
-      - name: Set up toolchain
+      - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          override: true
       
       - name: Build executable for Windows
         env:
@@ -33,12 +34,9 @@ jobs:
           PYAPP_PROJECT_VERSION: ${{ github.ref }}
           PYAPP_PYTHON_VERSION: '3.9'
           PYAPP_EXEC_SCRIPT: pyapp/requirements.w64.txt
-          CARGO_TARGET_DIR: pyapp/pyapp-latest
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release
-          
+        run: cargo build --release
+        working-directory: pyapp/pyapp-latest
+
       - name: Archive Windows executable
         if: runner.os == 'Windows'
         run: tar -czvf executable-windows.tar.gz pyapp/pyapp-latest/target/release/pyapp.exe
@@ -50,11 +48,8 @@ jobs:
           PYAPP_PROJECT_VERSION: ${{ github.ref }}
           PYAPP_PYTHON_VERSION: '3.9'
           PYAPP_EXEC_SCRIPT: pyapp/requirements.txt
-          CARGO_TARGET_DIR: pyapp/pyapp-latest
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release
+        run: cargo build --release
+        working-directory: pyapp/pyapp-latest
 
       - name: Archive Linux executable
         if: runner.os == 'Linux'
