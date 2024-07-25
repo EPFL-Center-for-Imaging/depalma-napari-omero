@@ -53,3 +53,5 @@ where = ["src"]
 
 [tool.setuptools_scm]
 write_to = "src/depalma_napari_omero/_version.py"
+version_scheme = "guess-next-dev"
+local_scheme = "no-local-version"
