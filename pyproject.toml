@@ -3,7 +3,7 @@ name = "depalma-napari-omero"
 dynamic = ["version"]
 description = "Napari interface for the De Palma lab."
 readme = "README.md"
-requires-python = "==3.9"
+requires-python = ">=3.9,<3.10"
 license = {file = "LICENSE"}
 authors = [{ name = "Mallory Wittwer", email = "mallory.wittwer@epfl.ch" }]
 
