@@ -40,6 +40,8 @@ jobs:
           pip install -r pyapp/requirements.txt
 
       - name: Build executable
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python pyapp/build.py
 
