@@ -76,6 +76,7 @@ jobs:
         run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
 
       - name: Archive Windows executable
+        shell: bash
         working-directory: pyapp/pyapp-latest/target/release
         run: |
           EXECUTABLE_NAME=${{ env.PYAPP_PROJECT_NAME }}_${{ runner.os }}_${{ env.VERSION }}.exe
