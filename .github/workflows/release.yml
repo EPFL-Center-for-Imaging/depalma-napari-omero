@@ -84,8 +84,9 @@ jobs:
       - name: Download Windows artifact
         uses: actions/download-artifact@v2
         with:
-          name: executable-windows-latest
+          name: executable-${{ runner.os }}
           path: .
+          # name: executable-windows-latest
 
       - name: Create Release
         id: create_release
