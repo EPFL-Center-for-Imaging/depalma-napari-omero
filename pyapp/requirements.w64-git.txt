@@ -1,0 +1,2 @@
+https://github.com/glencoesoftware/zeroc-ice-py-win-x86_64/releases/download/20240325/zeroc_ice-3.6.5-cp39-cp39-win_amd64.whl
+git+https://github.com/EPFL-Center-for-Imaging/depalma-napari-omero.git
