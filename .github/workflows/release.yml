@@ -37,78 +37,78 @@ jobs:
           python -m build .
           twine upload dist/*
 
-  # build:
-  #   needs: deploy
-  #   runs-on: ${{ matrix.os }}
-  #   strategy:
-  #     matrix:
-  #       # os: [ubuntu-latest, windows-latest]
-  #       os: [windows-latest]
+  build:
+    needs: deploy
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # os: [ubuntu-latest, windows-latest]
+        os: [windows-latest]
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v2
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
       
-  #     - name: Install Rust
-  #       uses: actions-rs/toolchain@v1
-  #       with:
-  #         toolchain: stable
-  #         override: true
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
 
-  #     - name: Extract PyPi package version
-  #       run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+      - name: Extract PyPi package version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
 
-  #     - name: Set environment variable for requirements.w64.txt
-  #       run: echo "REQUIREMENTS_PATH_WINDOWS=$(pwd)/pyapp/requirements.w64-pypi.txt" >> $GITHUB_ENV
+      - name: Set environment variable for requirements.w64.txt
+        run: echo "REQUIREMENTS_PATH_WINDOWS=$(pwd)/pyapp/requirements.w64-pypi.txt" >> $GITHUB_ENV
       
-  #     - name: Build executable for Windows
-  #       env:
-  #         PYAPP_PROJECT_NAME: 'depalma_napari_omero'
-  #         PYAPP_PROJECT_VERSION: ${{ env.VERSION }}
-  #         PYAPP_PYTHON_VERSION: '3.9'
-  #         PYAPP_EXEC_SCRIPT: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
-  #       run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
+      - name: Build executable for Windows
+        env:
+          PYAPP_PROJECT_NAME: 'depalma_napari_omero'
+          PYAPP_PROJECT_VERSION: ${{ env.VERSION }}
+          PYAPP_PYTHON_VERSION: '3.9'
+          PYAPP_EXEC_SCRIPT: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
+        run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
 
-  #     - name: Archive Windows executable
-  #       if: runner.os == 'Windows'
-  #       run: tar -czvf executable-windows.tar.gz pyapp/pyapp-latest/target/release/pyapp.exe
+      - name: Archive Windows executable
+        if: runner.os == 'Windows'
+        run: tar -czvf executable-windows.tar.gz pyapp/pyapp-latest/target/release/pyapp.exe
 
-  #     - name: Upload artifact
-  #       uses: actions/upload-artifact@v2
-  #       with:
-  #         name: executable-${{ runner.os }}
-  #         path: executable-*.tar.gz
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: executable-${{ runner.os }}
+          path: executable-*.tar.gz
 
-  # release:
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v2
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-  #     - name: Download Windows artifact
-  #       uses: actions/download-artifact@v2
-  #       with:
-  #         name: executable-Windows
-  #         path: .
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: executable-Windows
+          path: .
 
-  #     - name: Create Release
-  #       id: create_release
-  #       uses: actions/create-release@v1
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #       with:
-  #         tag_name: ${{ github.ref_name }}
-  #         release_name: Release ${{ github.ref_name }}
-  #         draft: false
-  #         prerelease: false
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
 
-  #     - name: Upload Windows executable to release
-  #       uses: actions/upload-release-asset@v1
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #       with:
-  #         upload_url: ${{ steps.create_release.outputs.upload_url }}
-  #         asset_path: ./executable-windows.tar.gz
-  #         asset_name: executable-windows.tar.gz
-  #         asset_content_type: application/gzip
+      - name: Upload Windows executable to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./executable-windows.tar.gz
+          asset_name: executable-windows.tar.gz
+          asset_content_type: application/gzip
