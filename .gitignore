@@ -122,3 +122,5 @@ notebooks/
 .vscode/
 
 release/
+
+**/_version.py
