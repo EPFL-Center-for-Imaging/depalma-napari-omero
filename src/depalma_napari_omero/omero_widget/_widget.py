@@ -853,29 +853,32 @@ class OMEROWidget(QWidget):
             & (self.df["class"] == image_class)
         ]
 
-        image_id = sub_df["image_id"].tolist()[0]
-        img_tags = self.server.get_image_tags(image_id)
-        image_tags_list = self.server.find_image_tag(img_tags)
-        image_tags_list.append("roi")
         dataset_id = sub_df["dataset_id"].tolist()[0]
+        image_id = sub_df["image_id"].tolist()[0]
 
         worker = self._threaded_upload(updated_data, layer_name, dataset_id)
         worker.returned.connect(self._upload_thread_returned)
-        worker.returned.connect(
-            lambda posted_image_id: self.server.tag_image_with_tag(
-                posted_image_id, tag_id=OMERO_TAGS["corrected"]
-            )
-        )
-        worker.returned.connect(
-            lambda posted_image_id: self.server.copy_image_tags(
-                src_image_id=image_id,
-                dst_image_id=posted_image_id,
-                exclude_tags=image_tags_list,
-            )
-        )
+        worker.returned.connect(lambda posted_image_id: self._upload_thread_returned_handle_image_tags(posted_image_id, image_id))
         self.pbar.setMaximum(0)
         self._grayout_ui()
         worker.start()
+
+    def _upload_thread_returned_handle_image_tags(self, posted_image_id, image_id):
+        self.server.connect()
+
+        img_tags = self.server.get_image_tags(image_id)
+        image_tags_list = self.server.find_image_tag(img_tags)
+        image_tags_list.append("roi")
+
+        self.server.copy_image_tags(
+            src_image_id=image_id,
+            dst_image_id=posted_image_id,
+            exclude_tags=image_tags_list,
+        )
+
+        self.server.tag_image_with_tag(
+            posted_image_id, tag_id=OMERO_TAGS["corrected"]
+        )
 
     def _upload_thread_returned(self, posted_image_id):
         self._reset_ui_and_project_state()

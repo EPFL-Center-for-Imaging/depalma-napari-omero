@@ -45,6 +45,9 @@ jobs:
         # os: [ubuntu-latest, windows-latest]
         os: [windows-latest]
 
+    env:
+      PYAPP_PROJECT_NAME: 'depalma_napari_omero'
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -62,23 +65,22 @@ jobs:
           VERSION=${VERSION#v}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: Verify extracted version
-        run: echo "Extracted version is $VERSION"
-
       - name: Set environment variable for requirements.w64.txt
         run: echo "REQUIREMENTS_PATH_WINDOWS=$(pwd)/pyapp/requirements.w64-pypi.txt" >> $GITHUB_ENV
       
       - name: Build executable for Windows
         env:
-          PYAPP_PROJECT_NAME: 'depalma_napari_omero'
           PYAPP_PROJECT_VERSION: ${{ env.VERSION }}
           PYAPP_PYTHON_VERSION: '3.9'
           PYAPP_EXEC_SCRIPT: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
         run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
 
       - name: Archive Windows executable
-        if: runner.os == 'Windows'
-        run: tar -czvf executable-windows.tar.gz pyapp/pyapp-latest/target/release/pyapp.exe
+        working-directory: pyapp/pyapp-latest/target/release
+        run: |
+          EXECUTABLE_NAME=${{ env.PYAPP_PROJECT_NAME }}_${{ runner.os }}_${{ env.VERSION }}.exe
+          mv pyapp.exe ${{ env.EXECUTABLE_NAME }}
+          tar -czvf ../../../../executable-windows.tar.gz ${{ env.EXECUTABLE_NAME }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v2
