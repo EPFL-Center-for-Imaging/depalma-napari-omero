@@ -57,9 +57,7 @@ jobs:
 
       - name: Extract PyPi package version
         run: |
-          VERSION=${{ github.ref_name }}
-          VERSION=${VERSION#v}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION=${${{ github.ref_name }}#v}" >> $GITHUB_ENV
 
       - name: Verify extracted version
         run: echo "Extracted version is $VERSION"
