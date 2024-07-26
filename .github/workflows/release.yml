@@ -80,8 +80,8 @@ jobs:
         working-directory: pyapp/pyapp-latest/target/release
         run: |
           EXECUTABLE_NAME=${{ env.PYAPP_PROJECT_NAME }}_${{ runner.os }}_${{ env.VERSION }}.exe
-          mv pyapp.exe ${{ env.EXECUTABLE_NAME }}
-          tar -czvf ../../../../executable-windows.tar.gz ${{ env.EXECUTABLE_NAME }}
+          mv pyapp.exe $EXECUTABLE_NAME
+          tar -czvf ../../../../executable-windows.tar.gz $EXECUTABLE_NAME
 
       - name: Upload artifact
         uses: actions/upload-artifact@v2
