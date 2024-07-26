@@ -34,6 +34,7 @@ class OmeroServer:
 
         for dataset in project.listChildren():
             dataset_id = dataset.getId()
+            dataset_name = dataset.getName()
             dataset = self.get_dataset(dataset_id)
 
             for image in dataset.listChildren():
@@ -59,7 +60,7 @@ class OmeroServer:
                 else:
                     image_class = "other"
                 
-                yield (dataset_id, image_id, image_name, specimen, time, time_tag, image_class)
+                yield (dataset_id, dataset_name, image_id, image_name, specimen, time, time_tag, image_class)
 
     def login(self, user: str, password: str):
         self.user = user

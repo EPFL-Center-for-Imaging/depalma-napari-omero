@@ -534,9 +534,9 @@ class OMEROWidget(QWidget):
         # Clear the input
         self.password.clear()
 
-    def _handle_dataset_changed(self, selected_dataset_id):
-        # print(selected_dataset_id)
-        dataset_id = int(selected_dataset_id)
+    def _handle_dataset_changed(self, selected_dataset_title):
+        dataset_id = int(self.cb_dataset.currentData())
+
         self.cb_download_generic.clear()
         df_sorted = self.df_all[
             self.df_all["dataset_id"] == dataset_id
@@ -546,7 +546,6 @@ class OMEROWidget(QWidget):
         )
         other_files_titles = df_sorted["title"].tolist()
         other_files_data = df_sorted["image_id"].tolist()
-        # print(other_files_titles)
         for title, data in zip(other_files_titles, other_files_data):
             self.cb_download_generic.addItem(title, data)
 
@@ -572,6 +571,7 @@ class OMEROWidget(QWidget):
     @thread_worker
     def _threaded_project_update(self):
         dataset_ids = []
+        dataset_names = []
         image_ids = []
         image_names = []
         specimens = []
@@ -582,6 +582,7 @@ class OMEROWidget(QWidget):
         k_dataset = 0
         for (
             dataset_id,
+            dataset_name,
             image_id,
             image_name,
             specimen,
@@ -590,6 +591,7 @@ class OMEROWidget(QWidget):
             image_class,
         ) in self.server.project_data_generator(self.project_id):
             dataset_ids.append(dataset_id)
+            dataset_names.append(dataset_name)
             image_ids.append(image_id)
             image_names.append(image_name)
             specimens.append(specimen)
@@ -608,6 +610,7 @@ class OMEROWidget(QWidget):
         self.df_all = pd.DataFrame(
             {
                 "dataset_id": dataset_ids,
+                "dataset_name": dataset_names,
                 "image_id": image_ids,
                 "image_name": image_names,
                 "specimen": specimens,
@@ -630,15 +633,17 @@ class OMEROWidget(QWidget):
             f"🔁 Batch detection ({len(self.pred_missing)})"
         )
 
-        # # Update the "uncategorized" UI
-        # self._update_combobox_uncategorized()
-
     def _update_combobox_datasets(self):
-        dataset_ids = np.array(
-            sorted(np.unique(self.df_all["dataset_id"].tolist()))
-        ).astype(str)
         self.cb_dataset.clear()
-        self.cb_dataset.addItems(dataset_ids)
+
+        df_sorted = self.df_all[["dataset_id", "dataset_name"]].drop_duplicates().sort_values(by='dataset_id')
+        df_sorted["title"] = df_sorted.apply(
+            lambda row: f"{row['dataset_id']} - {row['dataset_name']}", axis=1
+        )
+        dataset_titles = df_sorted["title"].tolist()
+        dataset_data = df_sorted["dataset_id"].tolist()
+        for title, data in zip(dataset_titles, dataset_data):
+            self.cb_dataset.addItem(title, data)
 
     def _update_combobox_specimens(self):
         self.cb_time.clear()
@@ -707,15 +712,6 @@ class OMEROWidget(QWidget):
         self.cb_image.clear()
         self.cb_image.addItems(image_classes)
 
-    # def _update_combobox_uncategorized(self):
-    #     self.cb_uncategorized.clear()
-    #     df_sorted = self.df_other.sort_values(by='image_id')[['image_id', 'image_name']]
-    #     df_sorted['title'] = df_sorted.apply(lambda row: f"{row['image_id']} - {row['image_name']}", axis=1)
-    #     other_files_titles = df_sorted['title'].tolist()
-    #     other_files_data = df_sorted['image_id'].tolist()
-    #     for title, data in zip(other_files_titles, other_files_data):
-    #         self.cb_uncategorized.addItem(title, data)
-
     @thread_worker
     def _threaded_download(self, image_id, image_name, image_class):
         self.server.connect()
@@ -739,18 +735,6 @@ class OMEROWidget(QWidget):
         self.pbar.setMaximum(0)
         self._grayout_ui()
         worker.start()
-
-    # def _trigger_download_uncategorized(self):
-    #     image_id = self.cb_uncategorized.currentData()
-    #     image_name = self.df_other[self.df_other['image_id'] == image_id]['image_name'].tolist()[0]
-    #     image_class = self.df_other[self.df_other['image_id'] == image_id]['class'].tolist()[0]
-
-    #     show_info(f"Downloading {image_id=} ({image_class})")
-    #     worker = self._threaded_download(image_id, image_name, image_class)
-    #     worker.returned.connect(self._download_thread_returned)
-    #     self.pbar.setMaximum(0)
-    #     self._grayout_ui()
-    #     worker.start()
 
     def _trigger_download(self):
         image_class = self.cb_image.currentText()
