@@ -804,10 +804,14 @@ class OMEROWidget(QWidget):
         self, posted_image_data, posted_image_name, dataset_id
     ):
         self.server.connect()
-        # posted_image_id = self.server.post_image_to_ds(posted_image_data, dataset_id, posted_image_name)
-        posted_image_id = self.server.import_image_to_ds(
-            posted_image_data, self.project_id, dataset_id, posted_image_name
+        
+        posted_image_id = self.server.post_image_to_ds(
+            posted_image_data, dataset_id, posted_image_name
         )
+        
+        # posted_image_id = self.server.import_image_to_ds(
+        #     posted_image_data, self.project_id, dataset_id, posted_image_name
+        # )
 
         return posted_image_id
 

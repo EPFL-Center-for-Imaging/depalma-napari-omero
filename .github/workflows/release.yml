@@ -40,7 +40,7 @@ jobs:
           PYAPP_PROJECT_NAME: 'depalma_napari_omero'
           PYAPP_PROJECT_VERSION: '0.1'
           PYAPP_PYTHON_VERSION: '3.9'
-          PYAPP_EXEC_SCRIPT: '$REQUIREMENTS_PATH_WINDOWS'
+          PYAPP_EXEC_SCRIPT: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
         run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
         # working-directory: pyapp/pyapp-latest
 
