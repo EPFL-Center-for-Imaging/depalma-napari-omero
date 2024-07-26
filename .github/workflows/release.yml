@@ -55,11 +55,11 @@ jobs:
           toolchain: stable
           override: true
 
-      # - name: Extract PyPi package version
-      #   run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-
       - name: Extract PyPi package version
-        run: echo "VERSION=${{ github.ref_name }}" | sed 's/^v//' >> $GITHUB_ENV
+        run: |
+          VERSION=${{ github.ref_name }}
+          VERSION=${VERSION#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Verify extracted version
         run: echo "Extracted version is $VERSION"
