@@ -29,6 +29,7 @@ dependencies = [
     "trackpy",
     "imagecodecs[all]",
     "tifffile",
+    "pooch",
 ]
 
 [project.entry-points."napari.manifest"]

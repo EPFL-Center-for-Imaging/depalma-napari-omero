@@ -1,3 +1,4 @@
+import os
 import re
 import ezomero
 import numpy as np
@@ -7,6 +8,7 @@ from omero.gateway import TagAnnotationWrapper
 import tempfile
 import tifffile
 from pathlib import Path
+import pooch
 
 OMERO_HOST = "omero-server.epfl.ch"
 OMERO_PORT = 4064
@@ -188,7 +190,11 @@ class OmeroServer:
     def import_image_to_ds(
         self, image: np.ndarray, project_id: int, dataset_id: int, image_title: str
     ) -> int:
-        with tempfile.NamedTemporaryFile(prefix=f"{Path(image_title).stem}_", suffix='.tif', delete=True) as temp_file:
+        cache_dir = pooch.os_cache('depalma-napari-omero')
+        if not cache_dir.exists():
+            os.mkdir(cache_dir)
+
+        with tempfile.NamedTemporaryFile(prefix=f"{Path(image_title).stem}_", suffix='.tif', delete=True, dir=cache_dir) as temp_file:
             # The file name always has a random string attached.
             tifffile.imwrite(temp_file.name, image)
 
