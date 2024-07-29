@@ -72,7 +72,8 @@ jobs:
         env:
           PYAPP_PROJECT_VERSION: ${{ env.VERSION }}
           PYAPP_PYTHON_VERSION: '3.9'
-          PYAPP_EXEC_SCRIPT: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
+          PYAPP_PROJECT_DEPENDENCY_FILE: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
+          # PYAPP_EXEC_SCRIPT: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
         run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
 
       - name: Archive Windows executable
