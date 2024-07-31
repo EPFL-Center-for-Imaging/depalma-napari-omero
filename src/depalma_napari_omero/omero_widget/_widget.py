@@ -626,6 +626,7 @@ class OMEROWidget(QWidget):
 
         # Update the UI
         self.cb_specimen.clear()
+        self.cb_download_generic.clear()
         self._update_combobox_specimens()
         self._update_combobox_datasets()
         self.btn_batch_roi.setText(f"🔁 Batch ROI ({len(self.roi_missing)})")
