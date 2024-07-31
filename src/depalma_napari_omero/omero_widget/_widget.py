@@ -432,7 +432,7 @@ class OMEROWidget(QWidget):
         self.cb_dataset.currentTextChanged.connect(
             self._handle_dataset_changed
         )
-        generic_upload_layout.addWidget(QLabel("Dataset ID", self), 0, 0)
+        generic_upload_layout.addWidget(QLabel("Dataset", self), 0, 0)
         generic_upload_layout.addWidget(self.cb_dataset, 0, 1)
 
         self.cb_download_generic = QComboBox()
@@ -875,6 +875,11 @@ class OMEROWidget(QWidget):
     def _trigger_upload_generic(self):
         layer_name = self.cb_upload_generic.currentText()
         if layer_name == "":
+            return
+        
+        selected_dataset_text = self.cb_dataset.currentText()
+        if selected_dataset_text == "":
+            show_info("No dataset selected!")
             return
 
         layer = self.viewer.layers[layer_name]

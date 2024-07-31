@@ -192,7 +192,8 @@ class OmeroServer:
     ) -> int:
         cache_dir = pooch.os_cache('depalma-napari-omero')
         if not cache_dir.exists():
-            os.mkdir(cache_dir)
+            os.makedirs(cache_dir)
+            # os.mkdir(cache_dir)
 
         with tempfile.NamedTemporaryFile(prefix=f"{Path(image_title).stem}_", suffix='.tif', delete=True, dir=cache_dir) as temp_file:
             # The file name always has a random string attached.
