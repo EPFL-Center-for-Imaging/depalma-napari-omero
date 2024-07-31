@@ -865,7 +865,11 @@ class OMEROWidget(QWidget):
         )
 
     def _upload_thread_returned(self, posted_image_id):
+        # Save the current index
+        current_specimen_idx = self.cb_specimen.currentIndex()
         self._reset_ui_and_project_state()
+        # Select the dataset that was previously selected
+        self.cb_specimen.setCurrentIndex(current_specimen_idx)
         show_info(f"Uploaded image {posted_image_id}.")
 
     def _trigger_upload_generic(self):
@@ -882,7 +886,7 @@ class OMEROWidget(QWidget):
         if isinstance(layer, Labels):
             updated_data = updated_data.astype(np.uint8)
 
-        dataset_id = int(self.cb_dataset.currentText())
+        dataset_id = int(self.cb_dataset.currentData())
 
         worker = self._threaded_upload(updated_data, layer_name, dataset_id)
         worker.returned.connect(self._upload_thread_returned)
