@@ -195,7 +195,7 @@ class OmeroServer:
             os.makedirs(cache_dir)
             # os.mkdir(cache_dir)
 
-        with tempfile.NamedTemporaryFile(prefix=f"{Path(image_title).stem}_", suffix='.tif', delete=True, dir=cache_dir) as temp_file:
+        with tempfile.NamedTemporaryFile(prefix=f"{Path(image_title).stem}_", suffix='.tif', delete=False, dir=cache_dir) as temp_file:
             # The file name always has a random string attached.
             tifffile.imwrite(temp_file.name, image)
 
@@ -204,6 +204,9 @@ class OmeroServer:
             )
 
             posted_img_id = image_id_list[0]
+
+            temp_file.close()
+            os.unlink(temp_file.name)
         
         return posted_img_id
 
