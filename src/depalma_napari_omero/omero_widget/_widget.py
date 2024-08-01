@@ -866,11 +866,29 @@ class OMEROWidget(QWidget):
         )
 
     def _upload_thread_returned(self, posted_image_id):
-        # Save the current index
+        # Save the current indeces
         current_specimen_idx = self.cb_specimen.currentIndex()
-        self._reset_ui_and_project_state()
-        # Select the dataset that was previously selected
-        self.cb_specimen.setCurrentIndex(current_specimen_idx)
+        current_time_idx = self.cb_time.currentIndex()
+        current_dataset_idx = self.cb_dataset.currentIndex()
+
+        self.server.connect()
+        n_datasets = self.server.get_n_datasets_in_project(self.project_id)
+        worker = self._threaded_project_update()
+        worker.returned.connect(self._ungrayout_ui)
+        worker.aborted.connect(self._ungrayout_ui)
+        worker.yielded.connect(lambda step: self.pbar.setValue(step))
+
+        # Select the dataset and time that was previously selected
+        worker.returned.connect(lambda _: self.cb_specimen.setCurrentIndex(current_specimen_idx))
+        worker.returned.connect(lambda _: self.cb_time.setCurrentIndex(current_time_idx))
+        worker.returned.connect(lambda _: self.cb_dataset.setCurrentIndex(current_dataset_idx))
+
+        self.active_batch_workers.append(worker)
+        self.pbar.setMaximum(n_datasets)
+        self.pbar.setValue(0)
+        self._grayout_ui()
+        worker.start()
+
         show_info(f"Uploaded image {posted_image_id}.")
 
     def _trigger_upload_generic(self):
