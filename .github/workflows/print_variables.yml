@@ -1,0 +1,71 @@
+name: Publish, Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "t*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: contains(github.ref, 'tags')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -U setuptools setuptools_scm wheel twine build
+      - name: Build and publish
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TWINE_API_KEY }}
+        run: |
+          git tag
+          python -m build .
+          twine upload dist/*
+
+  build:
+    needs: deploy
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # os: [ubuntu-latest, windows-latest]
+        os: [windows-latest]
+
+    env:
+      PYAPP_PROJECT_NAME: 'depalma_napari_omero'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Extract PyPi package version
+        shell: bash
+        run: |
+          VERSION=${{ github.ref_name }}
+          VERSION=${VERSION#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          
+          - name: Set environment variable for requirements.w64.txt
+          shell: bash
+          run: echo "REQUIREMENTS_PATH_WINDOWS=$(pwd)/pyapp/requirements.w64-pypi.txt" >> $GITHUB_ENV
+
+      - name: Print variables
+        shell: bash
+        run: |
+          echo ${{ env.REQUIREMENTS_PATH_WINDOWS }}
+          echo ${{ env.VERSION }}
+          echo ${{ env.PYAPP_PROJECT_NAME }}
