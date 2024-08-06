@@ -36,7 +36,7 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           
       - name: Set environment variable for requirements.w64.txt
-        # shell: bash
+        shell: bash
         run: echo "REQUIREMENTS_PATH_WINDOWS=$(pwd)/pyapp/requirements.w64-pypi.txt" >> $GITHUB_ENV
 
       - name: Print variables
