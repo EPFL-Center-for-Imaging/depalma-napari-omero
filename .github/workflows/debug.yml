@@ -1,4 +1,4 @@
-name: Publish, Build and Release
+name: Debug
 
 on:
   push:
