@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - debug
-    tags:
-      - "debug*"
   workflow_dispatch:
 
 permissions:
@@ -34,8 +32,7 @@ jobs:
       - name: Extract PyPi package version
         shell: bash
         run: |
-          VERSION=${{ github.ref_name }}
-          VERSION=${VERSION#v}
+          VERSION=0.1.7
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Set environment variable for requirements.txt
@@ -62,8 +59,8 @@ jobs:
         shell: bash
         working-directory: pyapp/pyapp-latest/target/release
         run: |
-          EXECUTABLE_NAME=${{ env.PYAPP_PROJECT_NAME }}_${{ runner.os }}_${{ env.VERSION }}.exe
-          mv pyapp.exe $EXECUTABLE_NAME
+          EXECUTABLE_NAME=${{ env.PYAPP_PROJECT_NAME }}_${{ runner.os }}_${{ env.VERSION }}
+          mv pyapp $EXECUTABLE_NAME
           tar -czvf ../../../../executable-linux.tar.gz $EXECUTABLE_NAME
 
       - name: Upload artifact
