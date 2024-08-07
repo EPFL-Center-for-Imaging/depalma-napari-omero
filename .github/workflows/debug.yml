@@ -34,10 +34,15 @@ jobs:
         run: |
           VERSION=0.1.7
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+      
+      - name: Generate requirements file
+        shell: bash
+        run: |
+          sed "s/\${PYAPP_PROJECT_VERSION}/$VERSION/" pyapp/requirements.template.txt > pyapp/requirements.linux.txt
 
       - name: Set environment variable for requirements.txt
         shell: bash
-        run: echo "REQUIREMENTS_PATH_LINUX=$(pwd)/requirements.txt" >> $GITHUB_ENV
+        run: echo "REQUIREMENTS_PATH_LINUX=$(pwd)/requirements.linux.txt" >> $GITHUB_ENV
         working-directory: pyapp
 
       - name: Print variables
