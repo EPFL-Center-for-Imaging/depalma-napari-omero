@@ -75,58 +75,67 @@ jobs:
           echo ${{ env.REQUIREMENTS_PATH_WINDOWS }}
           echo ${{ env.VERSION }}
           echo ${{ env.PYAPP_PROJECT_NAME }}
-      
-      - name: Build executable for Windows
-        env:
-          PYAPP_PROJECT_VERSION: ${{ env.VERSION }}
-          PYAPP_PYTHON_VERSION: '3.9'
-          PYAPP_PROJECT_DEPENDENCY_FILE: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
-        run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
 
-      - name: Archive Windows executable
+      - name: Check if requirements file exists
         shell: bash
-        working-directory: pyapp/pyapp-latest/target/release
         run: |
-          EXECUTABLE_NAME=${{ env.PYAPP_PROJECT_NAME }}_${{ runner.os }}_${{ env.VERSION }}.exe
-          mv pyapp.exe $EXECUTABLE_NAME
-          tar -czvf ../../../../executable-windows.tar.gz $EXECUTABLE_NAME
+          if [ -f ${{ env.REQUIREMENTS_PATH_WINDOWS }} ]; then
+            echo "File exists"
+          else
+            echo "File does not exist"
+          fi
+      
+      # - name: Build executable for Windows
+      #   env:
+      #     PYAPP_PROJECT_VERSION: ${{ env.VERSION }}
+      #     PYAPP_PYTHON_VERSION: '3.9'
+      #     PYAPP_PROJECT_DEPENDENCY_FILE: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
+      #   run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: executable-${{ runner.os }}
-          path: executable-*.tar.gz
+      # - name: Archive Windows executable
+      #   shell: bash
+      #   working-directory: pyapp/pyapp-latest/target/release
+      #   run: |
+      #     EXECUTABLE_NAME=${{ env.PYAPP_PROJECT_NAME }}_${{ runner.os }}_${{ env.VERSION }}.exe
+      #     mv pyapp.exe $EXECUTABLE_NAME
+      #     tar -czvf ../../../../executable-windows.tar.gz $EXECUTABLE_NAME
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      # - name: Upload artifact
+      #   uses: actions/upload-artifact@v2
+      #   with:
+      #     name: executable-${{ runner.os }}
+      #     path: executable-*.tar.gz
 
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v2
-        with:
-          name: executable-Windows
-          path: .
+  # release:
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v2
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+  #     - name: Download Windows artifact
+  #       uses: actions/download-artifact@v2
+  #       with:
+  #         name: executable-Windows
+  #         path: .
 
-      - name: Upload Windows executable to release
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./executable-windows.tar.gz
-          asset_name: executable-windows.tar.gz
-          asset_content_type: application/gzip
+  #     - name: Create Release
+  #       id: create_release
+  #       uses: actions/create-release@v1
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       with:
+  #         tag_name: ${{ github.ref_name }}
+  #         release_name: Release ${{ github.ref_name }}
+  #         draft: false
+  #         prerelease: false
+
+  #     - name: Upload Windows executable to release
+  #       uses: actions/upload-release-asset@v1
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       with:
+  #         upload_url: ${{ steps.create_release.outputs.upload_url }}
+  #         asset_path: ./executable-windows.tar.gz
+  #         asset_name: executable-windows.tar.gz
+  #         asset_content_type: application/gzip
