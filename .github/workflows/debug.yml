@@ -1,0 +1,56 @@
+name: Publish, Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "debug*"
+  pull_request:
+    branches:
+      - debug
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+
+    env:
+      PYAPP_PROJECT_NAME: 'depalma_napari_omero'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Extract PyPi package version
+        shell: bash
+        run: |
+          VERSION=${{ github.ref_name }}
+          VERSION=${VERSION#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Set environment variable for requirements.txt
+        shell: bash
+        run: echo "REQUIREMENTS_PATH_LINUX=$(pwd)/requirements.txt" >> $GITHUB_ENV
+        working-directory: pyapp
+
+      - name: Print variables
+        shell: bash
+        run: |
+          echo ${{ env.REQUIREMENTS_PATH_LINUX }}
+          echo ${{ env.VERSION }}
+          echo ${{ env.PYAPP_PROJECT_NAME }}
+      
+      - name: Build executable for Linux
+        shell: bash
+        env:
+          PYAPP_PROJECT_VERSION: ${{ env.VERSION }}
+          PYAPP_PYTHON_VERSION: '3.9'
+          PYAPP_PROJECT_DEPENDENCY_FILE: ${{ env.REQUIREMENTS_PATH_LINUX }}
+        run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
