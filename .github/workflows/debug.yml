@@ -25,6 +25,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
       - name: Extract PyPi package version
         shell: bash
         run: |
@@ -51,3 +57,51 @@ jobs:
           PYAPP_PYTHON_VERSION: '3.9'
           PYAPP_PROJECT_DEPENDENCY_FILE: ${{ env.REQUIREMENTS_PATH_LINUX }}
         run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
+      
+      - name: Archive Linux executable
+        shell: bash
+        working-directory: pyapp/pyapp-latest/target/release
+        run: |
+          EXECUTABLE_NAME=${{ env.PYAPP_PROJECT_NAME }}_${{ runner.os }}_${{ env.VERSION }}.exe
+          mv pyapp.exe $EXECUTABLE_NAME
+          tar -czvf ../../../../executable-linux.tar.gz $EXECUTABLE_NAME
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: executable-${{ runner.os }}
+          path: executable-*.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v2
+        with:
+            name: executable-Linux
+            path: .
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+            tag_name: ${{ github.ref_name }}
+            release_name: Release ${{ github.ref_name }}
+            draft: false
+            prerelease: false
+
+      - name: Upload Linux executable to release
+        uses: actions/upload-release-asset@v1
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+            upload_url: ${{ steps.create_release.outputs.upload_url }}
+            asset_path: ./executable-linux.tar.gz
+            asset_name: executable-linux.tar.gz
+            asset_content_type: application/gzip
