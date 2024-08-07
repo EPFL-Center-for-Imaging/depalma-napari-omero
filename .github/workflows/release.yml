@@ -85,12 +85,13 @@ jobs:
             echo "File does not exist"
           fi
       
-      # - name: Build executable for Windows
-      #   env:
-      #     PYAPP_PROJECT_VERSION: ${{ env.VERSION }}
-      #     PYAPP_PYTHON_VERSION: '3.9'
-      #     PYAPP_PROJECT_DEPENDENCY_FILE: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
-      #   run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
+      - name: Build executable for Windows
+        shell: bash
+        env:
+          PYAPP_PROJECT_VERSION: ${{ env.VERSION }}
+          PYAPP_PYTHON_VERSION: '3.9'
+          PYAPP_PROJECT_DEPENDENCY_FILE: ${{ env.REQUIREMENTS_PATH_WINDOWS }}
+        run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
 
       # - name: Archive Windows executable
       #   shell: bash
