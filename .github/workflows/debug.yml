@@ -3,12 +3,9 @@ name: Debug
 on:
   push:
     branches:
-      - main
+      - debug
     tags:
       - "debug*"
-  pull_request:
-    branches:
-      - debug
   workflow_dispatch:
 
 permissions:
