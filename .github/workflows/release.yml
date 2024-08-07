@@ -63,10 +63,15 @@ jobs:
           VERSION=${{ github.ref_name }}
           VERSION=${VERSION#v}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Set environment variable for requirements.w64.txt
+    
+      - name: Generate requirements file
         shell: bash
-        run: echo "REQUIREMENTS_PATH_WINDOWS=$(pwd)/requirements.w64-pypi.txt" >> $GITHUB_ENV
+        run: |
+          sed "s/\${PYAPP_PROJECT_VERSION}/$VERSION/" pyapp/requirements.template-windows.txt > pyapp/requirements.windows.txt
+
+      - name: Set environment variable for requirements.txt
+        shell: bash
+        run: echo "REQUIREMENTS_PATH_WINDOWS=$(pwd)/requirements.windows.txt" >> $GITHUB_ENV
         working-directory: pyapp
 
       - name: Print variables

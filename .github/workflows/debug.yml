@@ -38,7 +38,7 @@ jobs:
       - name: Generate requirements file
         shell: bash
         run: |
-          sed "s/\${PYAPP_PROJECT_VERSION}/$VERSION/" pyapp/requirements.template.txt > pyapp/requirements.linux.txt
+          sed "s/\${PYAPP_PROJECT_VERSION}/$VERSION/" pyapp/requirements.template-linux.txt > pyapp/requirements.linux.txt
 
       - name: Set environment variable for requirements.txt
         shell: bash
