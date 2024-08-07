@@ -15,30 +15,30 @@ permissions:
   contents: write
 
 jobs:
-  # deploy:
-  #   runs-on: ubuntu-latest
-  #   if: contains(github.ref, 'tags')
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: "3.9"
-  #     - name: Install dependencies
-  #       run: |
-  #         python -m pip install --upgrade pip
-  #         pip install -U setuptools setuptools_scm wheel twine build
-  #     - name: Build and publish
-  #       env:
-  #         TWINE_USERNAME: __token__
-  #         TWINE_PASSWORD: ${{ secrets.TWINE_API_KEY }}
-  #       run: |
-  #         git tag
-  #         python -m build .
-  #         twine upload dist/*
+  deploy:
+    runs-on: ubuntu-latest
+    if: contains(github.ref, 'tags')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -U setuptools setuptools_scm wheel twine build
+      - name: Build and publish
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TWINE_API_KEY }}
+        run: |
+          git tag
+          python -m build .
+          twine upload dist/*
 
   build:
-    # needs: deploy
+    needs: deploy
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -75,15 +75,6 @@ jobs:
           echo ${{ env.REQUIREMENTS_PATH_WINDOWS }}
           echo ${{ env.VERSION }}
           echo ${{ env.PYAPP_PROJECT_NAME }}
-
-      - name: Check if requirements file exists
-        shell: bash
-        run: |
-          if [ -f ${{ env.REQUIREMENTS_PATH_WINDOWS }} ]; then
-            echo "File exists"
-          else
-            echo "File does not exist"
-          fi
       
       - name: Build executable for Windows
         shell: bash
