@@ -23,7 +23,10 @@ from depalma_napari_omero.tumor_tracking import run_tracking, recompute_labels
 
 from mousetumornet.configuration import MODELS
 from mousetumornet import predict, postprocess
-from mousetumornet.roi import compute_roi_bones, compute_roi
+
+from mousetumornet.roi import compute_roi_bones, compute_roi  # This should be replaced by the lungs Yolo model.
+
+# from mouselungseg import LungsPredictor  # Use the Yolo model for ROIs in future versions.
 
 import numpy as np
 import pandas as pd
