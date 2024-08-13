@@ -23,6 +23,7 @@ dependencies = [
     "napari-remove-objects",
     "napari-adaptive-painting",
     "mousetumornet",
+    "mouselungseg",
     "ezomero==1.1.1",
     "numpy",
     "pandas",
