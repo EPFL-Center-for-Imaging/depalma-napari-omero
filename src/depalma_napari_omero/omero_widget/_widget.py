@@ -1,5 +1,6 @@
 import os
-import time
+import numpy as np
+import pandas as pd
 from napari.layers import Image, Labels
 from napari.qt.threading import thread_worker
 from napari.utils.notifications import show_info, show_error
@@ -20,26 +21,20 @@ from qtpy.QtWidgets import (
 )
 
 from depalma_napari_omero.omero_server import OmeroServer
-from depalma_napari_omero.tumor_tracking import run_tracking, remap_timeseries_labels
-from depalma_napari_omero.tumor_tracking import register_timeseries
 
 from mousetumornet.configuration import MODELS
 from mousetumornet import predict, postprocess
-
 from mousetumornet.roi import (
     compute_roi,
 )  # This should be replaced by the lungs Yolo model.
-from mouselungseg import LungsPredictor, extract_3d_roi
-
-import numpy as np
-import pandas as pd
+# from mouselungseg import LungsPredictor, extract_3d_roi
+from mousetumortrack import run_tracking
 
 OMERO_TAGS = {
     "corrected": 113885,
     "roi": 182116,
     "pred_nnunet_v4": 206192,
 }
-
 
 def timeseries_ids(df, specimen_name):
     """Returns the indeces of the labeled images in a timeseries. Priority to images with the #corrected tag, otherwise #raw_pred is used."""
@@ -1103,20 +1098,11 @@ class OMEROWidget(QWidget):
 
     @thread_worker
     def _threaded_tracking(self, labels_timeseries, labels_timeseries_name, image_timeseries=None):
-        if image_timeseries is None:
-            registered_tumor_timeseries = labels_timeseries
-        else:
-            predictor = LungsPredictor()
-            t0 = time.perf_counter()
-            lungs_timeseries = np.array([predictor.fast_predict(frame, skip_level=8) for frame in image_timeseries])
-            print(f"lungs prediction time: {time.perf_counter() - t0}")
-
-            t0 = time.perf_counter()
-            registered_tumor_timeseries, registered_lungs_timeseries = register_timeseries(labels_timeseries, lungs_timeseries, order=0)
-            print(f"registration time: {time.perf_counter() - t0}")
-
+        with_lungs_registration = image_timeseries is not None
         linkage_df, grouped_df, timeseries_corrected = run_tracking(
-            registered_tumor_timeseries,
+            labels_timeseries,
+            image_timeseries,
+            with_lungs_registration=with_lungs_registration,
             method="laptrack",
             max_dist_px=30, 
             dist_weight_ratio=0.9, 
@@ -1163,7 +1149,6 @@ class OMEROWidget(QWidget):
         if not filename.endswith(".csv"):
             filename += ".csv"
 
-        # # Format the dataframe (self.grouped_df => pivoted)
         formatted_df = self.grouped_df.reset_index()[
             ["tumor", "scan", "volume", "label"]
         ]
@@ -1174,14 +1159,6 @@ class OMEROWidget(QWidget):
             f"{i} - SCAN {scan_id:02d}" for (i, scan_id) in pivoted.columns[1:]
         ]
 
-        # # TODO - the specimen could be different in certain cases?
-        # specimen = self.cb_specimen.currentText()
-        # if specimen == "":
-        #     pivoted['Mouse ID'] = "Unknown"
-        # else:
-        #     pivoted['Mouse ID'] = specimen
-
-        # columns_order = ['Mouse ID', 'Tumor ID']
         columns_order = ['Tumor ID']
         volume_columns = [col for col in pivoted.columns if 'volume' in col]
         label_columns = [col for col in pivoted.columns if 'label' in col]
