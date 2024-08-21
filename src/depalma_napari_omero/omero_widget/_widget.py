@@ -1,4 +1,5 @@
 import os
+import time
 from napari.layers import Image, Labels
 from napari.qt.threading import thread_worker
 from napari.utils.notifications import show_info, show_error
@@ -11,22 +12,24 @@ from qtpy.QtWidgets import (
     QLineEdit,
     QProgressBar,
     QPushButton,
-    QCheckBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
     QFileDialog,
+    QCheckBox
 )
 
 from depalma_napari_omero.omero_server import OmeroServer
-from depalma_napari_omero.tumor_tracking import run_tracking, recompute_labels
+from depalma_napari_omero.tumor_tracking import run_tracking, remap_timeseries_labels
+from depalma_napari_omero.tumor_tracking import register_timeseries
 
 from mousetumornet.configuration import MODELS
 from mousetumornet import predict, postprocess
 
-from mousetumornet.roi import compute_roi_bones, compute_roi  # This should be replaced by the lungs Yolo model.
-
-# from mouselungseg import LungsPredictor  # Use the Yolo model for ROIs in future versions.
+from mousetumornet.roi import (
+    compute_roi,
+)  # This should be replaced by the lungs Yolo model.
+from mouselungseg import LungsPredictor, extract_3d_roi
 
 import numpy as np
 import pandas as pd
@@ -47,17 +50,15 @@ def timeseries_ids(df, specimen_name):
         else:
             return group[group["class"] == "raw_pred"].iloc[0]
 
-    roi_img_ids = df[
-        (df["specimen"] == specimen_name) & (df["class"] == "roi")
-    ][["image_id", "time"]]
+    roi_img_ids = df[(df["specimen"] == specimen_name) & (df["class"] == "roi")][
+        ["image_id", "time"]
+    ]
     labels_img_ids = df[
         (df["specimen"] == specimen_name)
         & (df["class"].isin(["corrected_pred", "raw_pred"]))
     ][["image_id", "time", "class"]]
     labels_img_ids = (
-        labels_img_ids.groupby("time")
-        .apply(filter_group)
-        .reset_index(drop=True)
+        labels_img_ids.groupby("time").apply(filter_group).reset_index(drop=True)
     )
 
     labels_img_ids = pd.merge(
@@ -83,9 +84,7 @@ def combine_images(image_array_list):
     output_shape.extend(list(np.max(image_shapes, axis=0)))
 
     timeseries = np.empty(output_shape, dtype=np.float32)
-    for k, (image, image_shape) in enumerate(
-        zip(image_array_list, image_shapes)
-    ):
+    for k, (image, image_shape) in enumerate(zip(image_array_list, image_shapes)):
         delta = (output_shape[1:] - image_shape) // 2
         timeseries[k][
             delta[0] : delta[0] + image_shape[0],
@@ -135,9 +134,7 @@ def parse_df(df):
             fill_value=0,
         ).reset_index()
         df_summary = df_summary.reindex(
-            columns=pd.Index(
-                ["specimen", "time"] + all_categories, name="class"
-            ),
+            columns=pd.Index(["specimen", "time"] + all_categories, name="class"),
             fill_value=0,
         )
 
@@ -164,9 +161,7 @@ def parse_df(df):
             fill_value=0,
         ).reset_index()
         df_summary = df_summary.reindex(
-            columns=pd.Index(
-                ["specimen", "time"] + all_categories, name="class"
-            ),
+            columns=pd.Index(["specimen", "time"] + all_categories, name="class"),
             fill_value=0,
         )
 
@@ -174,12 +169,10 @@ def parse_df(df):
     roi_missing_anomalies = df_summary[
         (df_summary["image"] > 0) & (df_summary["roi"] == 0)
     ][["specimen", "time"]]
-    merged = pd.merge(
-        df, roi_missing_anomalies, on=["specimen", "time"], how="inner"
-    )
-    roi_missing = merged[merged["class"] == "image"].sort_values(
-        ["specimen", "time"]
-    )[["dataset_id", "image_id", "image_name", "specimen", "time", "class"]]
+    merged = pd.merge(df, roi_missing_anomalies, on=["specimen", "time"], how="inner")
+    roi_missing = merged[merged["class"] == "image"].sort_values(["specimen", "time"])[
+        ["dataset_id", "image_id", "image_name", "specimen", "time", "class"]
+    ]
 
     # Roi but no preds or corrections
     pred_missing_anomalies = df_summary[
@@ -187,12 +180,10 @@ def parse_df(df):
         & (df_summary["raw_pred"] == 0)
         & (df_summary["corrected_pred"] == 0)
     ][["specimen", "time"]]
-    merged = pd.merge(
-        df, pred_missing_anomalies, on=["specimen", "time"], how="inner"
-    )
-    pred_missing = merged[merged["class"] == "roi"].sort_values(
-        ["specimen", "time"]
-    )[["dataset_id", "image_id", "image_name", "specimen", "time", "class"]]
+    merged = pd.merge(df, pred_missing_anomalies, on=["specimen", "time"], how="inner")
+    pred_missing = merged[merged["class"] == "roi"].sort_values(["specimen", "time"])[
+        ["dataset_id", "image_id", "image_name", "specimen", "time", "class"]
+    ]
 
     # Preds but no corrections
     correction_missing_anomalies = df_summary[
@@ -218,9 +209,7 @@ def parse_df(df):
         print(f"{len(roi_missing)} ROIs are missing for these image IDs:")
         print(roi_missing["image_id"].tolist())
     if len(pred_missing) > 0:
-        print(
-            f"{len(pred_missing)} model predictions are missing for these image IDs:"
-        )
+        print(f"{len(pred_missing)} model predictions are missing for these image IDs:")
         print(pred_missing["image_id"].tolist())
     if n_correction_missing > 0:
         print(
@@ -320,9 +309,7 @@ class OMEROWidget(QWidget):
 
         # Project (experiment)
         self.cb_project = QComboBox()
-        self.cb_project.currentTextChanged.connect(
-            self._handle_project_changed
-        )
+        self.cb_project.currentTextChanged.connect(self._handle_project_changed)
         experiment_layout.addWidget(self.cb_project, 0, 0, 1, 3)
 
         # Batch processing on experiment
@@ -353,9 +340,7 @@ class OMEROWidget(QWidget):
 
         # Specimens (mouse)
         self.cb_specimen = QComboBox()
-        self.cb_specimen.currentTextChanged.connect(
-            self._update_combobox_times
-        )
+        self.cb_specimen.currentTextChanged.connect(self._update_combobox_times)
         mouse_layout.addWidget(self.cb_specimen, 0, 0, 1, 2)
 
         # Download ROIs timeseries
@@ -366,15 +351,11 @@ class OMEROWidget(QWidget):
         mouse_layout.addWidget(self.btn_download_roi_series, 1, 0)  # , 1, 2)
 
         # Download tumor labels timeseries
-        self.btn_download_labels_series = QPushButton(
-            "⏬ Tumor series (-)", self
-        )
+        self.btn_download_labels_series = QPushButton("⏬ Tumor series (-)", self)
         self.btn_download_labels_series.clicked.connect(
             self._trigger_download_timeseries_labels
         )
-        mouse_layout.addWidget(
-            self.btn_download_labels_series, 1, 1
-        )  # , 1, 2)
+        mouse_layout.addWidget(self.btn_download_labels_series, 1, 1)  # , 1, 2)
 
         # Scan time
         self.cb_time = QComboBox()
@@ -406,9 +387,7 @@ class OMEROWidget(QWidget):
 
         # Upload button
         btn_upload_corrections = QPushButton("⏫ Upload", self)
-        btn_upload_corrections.clicked.connect(
-            self._trigger_upload_corrections
-        )
+        btn_upload_corrections.clicked.connect(self._trigger_upload_corrections)
         image_layout.addWidget(btn_upload_corrections, 5, 0, 1, 2)
 
         ### Tracking tab
@@ -419,12 +398,19 @@ class OMEROWidget(QWidget):
         self.cb_track_labels = QComboBox()
         tracking_layout.addWidget(QLabel("Tumor series", self), 0, 0)
         tracking_layout.addWidget(self.cb_track_labels, 0, 1)
+        self.cb_track_images = QComboBox()
+        tracking_layout.addWidget(QLabel("Image series", self), 1, 0)
+        tracking_layout.addWidget(self.cb_track_images, 1, 1)
+        tracking_layout.addWidget(QLabel("Align the scans before tracking", self), 2, 0)
+        self.with_lungs_checkbox = QCheckBox()
+        self.with_lungs_checkbox.setChecked(True)
+        tracking_layout.addWidget(self.with_lungs_checkbox, 2, 1)
         track_btn = QPushButton("Run tracking", self)
         track_btn.clicked.connect(self._trigger_tracking)
-        tracking_layout.addWidget(track_btn, 1, 0, 1, 2)
+        tracking_layout.addWidget(track_btn, 3, 0, 1, 2)
         track_csv_btn = QPushButton("Save as CSV", self)
         track_csv_btn.clicked.connect(self._save_track_csv)
-        tracking_layout.addWidget(track_csv_btn, 2, 0, 1, 2)
+        tracking_layout.addWidget(track_csv_btn, 4, 0, 1, 2)
 
         ### Generic upload tab
         generic_upload_layout = QGridLayout()
@@ -432,9 +418,7 @@ class OMEROWidget(QWidget):
         generic_upload_layout.setAlignment(Qt.AlignTop)
 
         self.cb_dataset = QComboBox()
-        self.cb_dataset.currentTextChanged.connect(
-            self._handle_dataset_changed
-        )
+        self.cb_dataset.currentTextChanged.connect(self._handle_dataset_changed)
         generic_upload_layout.addWidget(QLabel("Dataset", self), 0, 0)
         generic_upload_layout.addWidget(self.cb_dataset, 0, 1)
 
@@ -509,17 +493,19 @@ class OMEROWidget(QWidget):
 
         self.cb_upload.clear()
         self.cb_track_labels.clear()
+        self.cb_track_images.clear()
         for x in self.viewer.layers:
             if isinstance(x, Labels):
                 if len(x.data.shape) == 3:
                     self.cb_upload.addItem(x.name, x.data)
                 if len(x.data.shape) == 4:  # Timeseries labels
                     self.cb_track_labels.addItem(x.name, x.data)
+            elif isinstance(x, Image):
+                if len(x.data.shape) == 4:  # Timeseries images
+                    self.cb_track_images.addItem(x.name, x.data)
 
     def _login(self):
-        self.server.login(
-            user=self.username.text(), password=self.password.text()
-        )
+        self.server.login(user=self.username.text(), password=self.password.text())
 
         ### Trigger connection upon startup
         connect_status = self.server.connect()
@@ -541,9 +527,9 @@ class OMEROWidget(QWidget):
         dataset_id = int(self.cb_dataset.currentData())
 
         self.cb_download_generic.clear()
-        df_sorted = self.df_all[
-            self.df_all["dataset_id"] == dataset_id
-        ].sort_values(by="image_id")[["image_id", "image_name"]]
+        df_sorted = self.df_all[self.df_all["dataset_id"] == dataset_id].sort_values(
+            by="image_id"
+        )[["image_id", "image_name"]]
         df_sorted["title"] = df_sorted.apply(
             lambda row: f"{row['image_id']} - {row['image_name']}", axis=1
         )
@@ -603,9 +589,7 @@ class OMEROWidget(QWidget):
             image_classes.append(image_class)
 
             # For the progressbar update:
-            if (previous_dataset_id is None) | (
-                previous_dataset_id != dataset_id
-            ):
+            if (previous_dataset_id is None) | (previous_dataset_id != dataset_id):
                 previous_dataset_id = dataset_id
                 k_dataset += 1
                 yield k_dataset
@@ -633,14 +617,16 @@ class OMEROWidget(QWidget):
         self._update_combobox_specimens()
         self._update_combobox_datasets()
         self.btn_batch_roi.setText(f"🔁 Batch ROI ({len(self.roi_missing)})")
-        self.btn_batch_nnunet.setText(
-            f"🔁 Batch detection ({len(self.pred_missing)})"
-        )
+        self.btn_batch_nnunet.setText(f"🔁 Batch detection ({len(self.pred_missing)})")
 
     def _update_combobox_datasets(self):
         self.cb_dataset.clear()
 
-        df_sorted = self.df_all[["dataset_id", "dataset_name"]].drop_duplicates().sort_values(by='dataset_id')
+        df_sorted = (
+            self.df_all[["dataset_id", "dataset_name"]]
+            .drop_duplicates()
+            .sort_values(by="dataset_id")
+        )
         df_sorted["title"] = df_sorted.apply(
             lambda row: f"{row['dataset_id']} - {row['dataset_name']}", axis=1
         )
@@ -668,14 +654,9 @@ class OMEROWidget(QWidget):
         )
 
         n_rois_timeseries = len(self.roi_timeseries_ids)
-        n_nans_labels_timeseries = (
-            np.isnan(self.labels_timeseries_ids).any().sum()
-        )
-        n_labels_timeseries = (
-            len(self.labels_timeseries_ids) - n_nans_labels_timeseries
-        )
+        n_nans_labels_timeseries = np.isnan(self.labels_timeseries_ids).any().sum()
+        n_labels_timeseries = len(self.labels_timeseries_ids) - n_nans_labels_timeseries
 
-        # UPDATE THE TIMESERIES BUTTON TEXT
         self.btn_download_roi_series.setText(
             f"⏬ Image series({n_rois_timeseries} scans)"
         )
@@ -696,9 +677,7 @@ class OMEROWidget(QWidget):
                 float(time)
             )  # the value can be '-1.0' which needs to be cast into a float first.
 
-        sub_df = self.df[
-            (self.df["specimen"] == specimen) & (self.df["time"] == time)
-        ]
+        sub_df = self.df[(self.df["specimen"] == specimen) & (self.df["time"] == time)]
 
         image_classes = sub_df["class"].tolist()
 
@@ -782,21 +761,17 @@ class OMEROWidget(QWidget):
         elif image_class in ["roi", "image"]:
             self.viewer.add_image(image_data, name=image_name)
         else:
-            print(
-                f"Unknown image class: {image_class}. Attempting to load an image."
-            )
+            print(f"Unknown image class: {image_class}. Attempting to load an image.")
             self.viewer.add_image(image_data, name=image_name)
 
     @thread_worker
-    def _threaded_upload(
-        self, posted_image_data, posted_image_name, dataset_id
-    ):
+    def _threaded_upload(self, posted_image_data, posted_image_name, dataset_id):
         self.server.connect()
-        
+
         # posted_image_id = self.server.post_image_to_ds(
         #     posted_image_data, dataset_id, posted_image_name
         # )
-        
+
         posted_image_id = self.server.import_image_to_ds(
             posted_image_data, self.project_id, dataset_id, posted_image_name
         )
@@ -846,7 +821,11 @@ class OMEROWidget(QWidget):
 
         worker = self._threaded_upload(updated_data, layer_name, dataset_id)
         worker.returned.connect(self._upload_thread_returned)
-        worker.returned.connect(lambda posted_image_id: self._upload_thread_returned_handle_image_tags(posted_image_id, image_id))
+        worker.returned.connect(
+            lambda posted_image_id: self._upload_thread_returned_handle_image_tags(
+                posted_image_id, image_id
+            )
+        )
         self.pbar.setMaximum(0)
         self._grayout_ui()
         worker.start()
@@ -864,9 +843,7 @@ class OMEROWidget(QWidget):
             exclude_tags=image_tags_list,
         )
 
-        self.server.tag_image_with_tag(
-            posted_image_id, tag_id=OMERO_TAGS["corrected"]
-        )
+        self.server.tag_image_with_tag(posted_image_id, tag_id=OMERO_TAGS["corrected"])
 
     def _upload_thread_returned(self, posted_image_id):
         # Save the current indeces
@@ -882,9 +859,15 @@ class OMEROWidget(QWidget):
         worker.yielded.connect(lambda step: self.pbar.setValue(step))
 
         # Select the dataset and time that was previously selected
-        worker.returned.connect(lambda _: self.cb_specimen.setCurrentIndex(current_specimen_idx))
-        worker.returned.connect(lambda _: self.cb_time.setCurrentIndex(current_time_idx))
-        worker.returned.connect(lambda _: self.cb_dataset.setCurrentIndex(current_dataset_idx))
+        worker.returned.connect(
+            lambda _: self.cb_specimen.setCurrentIndex(current_specimen_idx)
+        )
+        worker.returned.connect(
+            lambda _: self.cb_time.setCurrentIndex(current_time_idx)
+        )
+        worker.returned.connect(
+            lambda _: self.cb_dataset.setCurrentIndex(current_dataset_idx)
+        )
 
         self.active_batch_workers.append(worker)
         self.pbar.setMaximum(n_datasets)
@@ -898,7 +881,7 @@ class OMEROWidget(QWidget):
         layer_name = self.cb_upload_generic.currentText()
         if layer_name == "":
             return
-        
+
         selected_dataset_text = self.cb_dataset.currentText()
         if selected_dataset_text == "":
             show_info("No dataset selected!")
@@ -930,9 +913,7 @@ class OMEROWidget(QWidget):
         self.server.connect()
         model = list(MODELS.keys())[0]
         for k, (_, row) in enumerate(
-            self.pred_missing[
-                ["dataset_id", "image_id", "image_name"]
-            ].iterrows()
+            self.pred_missing[["dataset_id", "image_id", "image_name"]].iterrows()
         ):
             image_id = row["image_id"]
             dataset_id = row["dataset_id"]
@@ -995,17 +976,13 @@ class OMEROWidget(QWidget):
     def _batch_roi(self, n_rois_to_compute):
         self.server.connect()
         for k, (_, row) in enumerate(
-            self.roi_missing[
-                ["dataset_id", "image_id", "image_name"]
-            ].iterrows()
+            self.roi_missing[["dataset_id", "image_id", "image_name"]].iterrows()
         ):
             image_id = row["image_id"]
             dataset_id = row["dataset_id"]
             image_name = row["image_name"]
 
-            print(
-                f"Computing {k+1} / {n_rois_to_compute} ROIs. Image ID = {image_id}"
-            )
+            print(f"Computing {k+1} / {n_rois_to_compute} ROIs. Image ID = {image_id}")
 
             image_name_stem = os.path.splitext(image_name)[0]
             posted_image_name = f"{image_name_stem}_roi.tif"
@@ -1025,9 +1002,7 @@ class OMEROWidget(QWidget):
             posted_image_id = self.server.post_image_to_ds(
                 roi, dataset_id, posted_image_name
             )
-            self.server.tag_image_with_tag(
-                posted_image_id, tag_id=OMERO_TAGS["roi"]
-            )
+            self.server.tag_image_with_tag(posted_image_id, tag_id=OMERO_TAGS["roi"])
 
             image_tags_list = self.server.find_image_tag(
                 self.server.get_image_tags(image_id)
@@ -1070,7 +1045,6 @@ class OMEROWidget(QWidget):
             yield k + 1
 
         return (combine_images(images), specimen_name)
-        # return (combine_images([self.server.download_image(img_id) for img_id in to_download_ids]), specimen_name)
 
     def _trigger_download_timeseries_rois(self):
         specimen_name = self.cb_specimen.currentText()
@@ -1128,19 +1102,45 @@ class OMEROWidget(QWidget):
         self.viewer.add_labels(timeseries, name=f"{specimen_name}_labels")
 
     @thread_worker
-    def _threaded_tracking(self, timeseries, timeseries_name):
-        linkage_df, grouped_df = run_tracking(timeseries)
-        tracks = linkage_df[["tumor", "scan", "z", "y", "x"]].values.astype(
-            float
+    def _threaded_tracking(self, labels_timeseries, labels_timeseries_name, image_timeseries=None):
+        if image_timeseries is None:
+            registered_tumor_timeseries = labels_timeseries
+        else:
+            predictor = LungsPredictor()
+            t0 = time.perf_counter()
+            lungs_timeseries = np.array([predictor.fast_predict(frame, skip_level=8) for frame in image_timeseries])
+            print(f"lungs prediction time: {time.perf_counter() - t0}")
+
+            t0 = time.perf_counter()
+            registered_tumor_timeseries, registered_lungs_timeseries = register_timeseries(labels_timeseries, lungs_timeseries, order=0)
+            print(f"registration time: {time.perf_counter() - t0}")
+
+        linkage_df, grouped_df, timeseries_corrected = run_tracking(
+            registered_tumor_timeseries,
+            method="laptrack",
+            max_dist_px=30, 
+            dist_weight_ratio=0.9, 
+            max_volume_diff_rel=1.0,
+            memory=0, 
         )
-        timeseries_corrected = recompute_labels(timeseries, linkage_df)
-        return (timeseries_name, timeseries_corrected, tracks, grouped_df)
+
+        return (labels_timeseries_name, timeseries_corrected, grouped_df)
 
     def _trigger_tracking(self):
-        timeseries = self.cb_track_labels.currentData()
         timeseries_name = self.cb_track_labels.currentText()
+        if timeseries_name == "":
+            print("No tumor series found.")
+            return
+        timeseries = self.cb_track_labels.currentData()
 
-        worker = self._threaded_tracking(timeseries, timeseries_name)
+        image_timeseries = None
+        if self.with_lungs_checkbox.isChecked():
+            if self.cb_track_images.currentText() == "":
+                show_info("No image series found.")
+            else:
+                image_timeseries = self.cb_track_images.currentData()
+                
+        worker = self._threaded_tracking(timeseries, timeseries_name, image_timeseries)
         worker.returned.connect(self._tracking_returned)
         self.pbar.setMaximum(0)
         self._grayout_ui()
@@ -1148,31 +1148,22 @@ class OMEROWidget(QWidget):
 
     def _tracking_returned(self, payload):
         self._ungrayout_ui()
-        timeseries_name, timeseries_corrected, tracks, grouped_df = payload
+        timeseries_name, timeseries_corrected, grouped_df = payload
         self.grouped_df = grouped_df
         # Add layers to the viewer
-        self.viewer.add_labels(
-            timeseries_corrected, name=f"{timeseries_name}_tracked"
-        )
-        self.viewer.add_tracks(
-            tracks,
-            name="Tracks (Trackpy)",
-            tail_length=len(timeseries_corrected),
-            head_length=len(timeseries_corrected),
-        )
+        self.viewer.add_labels(timeseries_corrected, name=f"{timeseries_name}_tracked", opacity=1.0)
+        self.viewer.layers[timeseries_name].visible = False  # Turn off visibility of the untracked labels layer
 
     def _save_track_csv(self):
         if self.grouped_df is None:
-            print("No tracking data found.")
+            show_info("No tracking data found.")
             return
-        print("Saving CSV.")
-        filename, _ = QFileDialog.getSaveFileName(
-            self, "Save as CSV", ".", "*.csv"
-        )
+        
+        filename, _ = QFileDialog.getSaveFileName(self, "Save as CSV", ".", "*.csv")
         if not filename.endswith(".csv"):
             filename += ".csv"
 
-        # # Format the dataframe
+        # # Format the dataframe (self.grouped_df => pivoted)
         formatted_df = self.grouped_df.reset_index()[
             ["tumor", "scan", "volume", "label"]
         ]
@@ -1182,7 +1173,25 @@ class OMEROWidget(QWidget):
         pivoted.columns = ["Tumor ID"] + [
             f"{i} - SCAN {scan_id:02d}" for (i, scan_id) in pivoted.columns[1:]
         ]
+
+        # # TODO - the specimen could be different in certain cases?
+        # specimen = self.cb_specimen.currentText()
+        # if specimen == "":
+        #     pivoted['Mouse ID'] = "Unknown"
+        # else:
+        #     pivoted['Mouse ID'] = specimen
+
+        # columns_order = ['Mouse ID', 'Tumor ID']
+        columns_order = ['Tumor ID']
+        volume_columns = [col for col in pivoted.columns if 'volume' in col]
+        label_columns = [col for col in pivoted.columns if 'label' in col]
+        for volume_col, label_col in zip(volume_columns, label_columns):
+            columns_order.append(volume_col)
+            columns_order.append(label_col)
+        pivoted = pivoted[columns_order]
+
         pivoted.to_csv(filename)
+        show_info(f"Saved {filename}.")
 
     # Others
     def _grayout_ui(self):
