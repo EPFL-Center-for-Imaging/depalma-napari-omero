@@ -1156,15 +1156,25 @@ class OMEROWidget(QWidget):
             index="tumor", columns="scan", values=["volume", "label"]
         ).reset_index()
         pivoted.columns = ["Tumor ID"] + [
-            f"{i} - SCAN {scan_id:02d}" for (i, scan_id) in pivoted.columns[1:]
+            f"{i} - SCAN{scan_id:02d}" for (i, scan_id) in pivoted.columns[1:]
         ]
 
-        columns_order = ['Tumor ID']
         volume_columns = [col for col in pivoted.columns if 'volume' in col]
         label_columns = [col for col in pivoted.columns if 'label' in col]
+
+        # Fold change
+        initial_volume_col = volume_columns[0]
+        for k, volume_col in enumerate(volume_columns[1:]):
+            pivoted[f"fold change - SCAN01 to SCAN{(k+2):02d}"] = (pivoted[volume_col] - pivoted[initial_volume_col]) / pivoted[initial_volume_col]
+
+        # Re-order the columns
+        columns_order = ['Tumor ID']
         for volume_col, label_col in zip(volume_columns, label_columns):
-            columns_order.append(volume_col)
             columns_order.append(label_col)
+            columns_order.append(volume_col)
+        fold_change_columns = [col for col in pivoted.columns if 'fold' in col]
+        for fold_col in fold_change_columns:
+            columns_order.append(fold_col)
         pivoted = pivoted[columns_order]
 
         pivoted.to_csv(filename)
