@@ -1,59 +1,50 @@
 ![EPFL Center for Imaging logo](https://imaging.epfl.ch/resources/logo-for-gitlab.svg)
 ![screenshot](./assets/screenshot.png)
-# De Palma Lab - Center for Imaging (2024)
+# Image analysis of tumor nodules in mice CT scans
 
-- TODO
+We provide a unified user interface in Napari to detect, track, visualize, annotate, and measure the size evolution of lung tumor nodules in mice CT scans. The datasets and experiment metadata are automatically downloaded and parsed from OMERO.
+
+This project is part of a collaboration between the [EPFL Center for Imaging](https://imaging.epfl.ch/) and the [De Palma Lab](https://www.epfl.ch/labs/depalma-lab/).
 
 ## Installation
 
-First, install **Miniconda** by following the instructions: https://docs.conda.io/en/latest/miniconda.html.
+**As a standalone app**
 
-Then, start an **Anaconda Prompt** (on Windows, you can find it in the start menu).
+Download and run the latest installer from the [Releases](https://github.com/EPFL-Center-for-Imaging/depalma-napari-omero/releases) page.
 
-Set up a `conda` environment with **Python 3.9**:
+**In Python**
 
-```
-conda create -n project-env python=3.9
-```
+We recommend performing the installation in a clean Python environment. Install our package from PyPi:
 
-Activate the environment:
-
-```
-conda activate project-env
+```sh
+pip install depalma-napari-omero
 ```
 
-On Windows, the `zeroc-ice` dependency fails to install from `pip`. As a workaround, install it with `conda`:
+or from the repository:
 
-```
-conda install -c conda-forge zeroc-ice
-```
-
-Install Napari and the `depalma plugin` from the GitLab repository in the `project-env` environment:
-
-```
-pip install git+https://gitlab.com/epfl-center-for-imaging/depalma.git
+```sh
+pip install git+https://github.com/EPFL-Center-for-Imaging/depalma-napari-omero.git
 ```
 
-Start the Napari app with the `depalma` plugin:
+or clone the repository and install with:
 
-```
-napari -w depalma
-```
-
-## Update the project
-
-To update the project to the latest version, force the reinstallation of the `depalma` plugin in your environment:
-
-```
-pip install --force-reinstall git+https://gitlab.com/epfl-center-for-imaging/depalma.git
+```sh
+git clone git+https://github.com/EPFL-Center-for-Imaging/depalma-napari-omero.git
+cd depalma-napari-omero
+pip install -e .
 ```
 
-## Build with PyApp
+## Usage
+
+From the command-line, start Napari with the `depalma-napari-omero` plugin:
 
 ```
-python pyapp/build.py
+napari -w depalma-napari-omero
 ```
 
 ## Related projects
 
-- [JupyterHub (De Palma)](https://gitlab.com/epfl-center-for-imaging/depalma-jupyterhub)
+- [Mouse Tumor Net](https://gitlab.com/epfl-center-for-imaging/mousetumornet) | Detect tumor nodules in mice CT scans.
+- [Mouse Lungs Seg](https://gitlab.com/epfl-center-for-imaging/mouselungseg) | Detect the lungs cavity in mice CT scans.
+- [Mouse Tumor Track](https://gitlab.com/epfl-center-for-imaging/mousetumortrack) | Track tumor nodules in mice CT scans.
+- [JupyterHub (De Palma)](https://gitlab.com/epfl-center-for-imaging/depalma-jupyterhub) | A tailored JupyterHub deployment.
