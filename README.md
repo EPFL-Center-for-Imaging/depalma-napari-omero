@@ -44,7 +44,7 @@ napari -w depalma-napari-omero
 
 ## Related projects
 
-- [Mouse Tumor Net](https://gitlab.com/epfl-center-for-imaging/mousetumornet) | Detect tumor nodules in mice CT scans.
-- [Mouse Lungs Seg](https://gitlab.com/epfl-center-for-imaging/mouselungseg) | Detect the lungs cavity in mice CT scans.
-- [Mouse Tumor Track](https://gitlab.com/epfl-center-for-imaging/mousetumortrack) | Track tumor nodules in mice CT scans.
+- [Mouse Tumor Net](https://github.com/EPFL-Center-for-Imaging/mousetumornet) | Detect tumor nodules in mice CT scans.
+- [Mouse Lungs Seg](https://github.com/EPFL-Center-for-Imaging/mouselungseg) | Detect the lungs cavity in mice CT scans.
+- [Mouse Tumor Track](https://github.com/EPFL-Center-for-Imaging/mousetumortrack) | Track tumor nodules in mice CT scans.
 - [JupyterHub (De Palma)](https://gitlab.com/epfl-center-for-imaging/depalma-jupyterhub) | A tailored JupyterHub deployment.
