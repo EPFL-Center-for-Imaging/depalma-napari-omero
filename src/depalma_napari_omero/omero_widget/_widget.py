@@ -287,12 +287,12 @@ class OMEROWidget(QWidget):
         select_layout.addWidget(experiment_group, 0, 0)
 
         # Mouse group
-        mouse_group = QGroupBox(qwidget)
-        mouse_group.setTitle("Case")
-        mouse_layout = QGridLayout()
-        mouse_group.setLayout(mouse_layout)
-        mouse_group.layout().setContentsMargins(10, 10, 10, 10)
-        select_layout.addWidget(mouse_group, 1, 0)
+        # mouse_group = QGroupBox(qwidget)
+        # mouse_group.setTitle("Case")
+        # mouse_layout = QGridLayout()
+        # mouse_group.setLayout(mouse_layout)
+        # mouse_group.layout().setContentsMargins(10, 10, 10, 10)
+        # select_layout.addWidget(mouse_group, 1, 0)
 
         # Image data group
         image_group = QGroupBox(qwidget)
@@ -325,60 +325,32 @@ class OMEROWidget(QWidget):
         cancel_btn.clicked.connect(self._handle_cancel)
         experiment_layout.addWidget(cancel_btn, 2, 0, 1, 3)
 
-        # # Other files combobox and button
-        # self.cb_uncategorized = QComboBox()
-        # experiment_layout.addWidget(QLabel("Uncategorized", self), 3, 0)
-        # experiment_layout.addWidget(self.cb_uncategorized, 3, 1)
-        # btn_download_uncategorized = QPushButton("⏬ Download", self)
-        # btn_download_uncategorized.clicked.connect(self._trigger_download_uncategorized)
-        # experiment_layout.addWidget(btn_download_uncategorized, 3, 2)
-
         # Specimens (mouse)
         self.cb_specimen = QComboBox()
         self.cb_specimen.currentTextChanged.connect(self._update_combobox_times)
-        mouse_layout.addWidget(self.cb_specimen, 0, 0, 1, 2)
-
-        # Download ROIs timeseries
-        self.btn_download_roi_series = QPushButton("⏬ Image series (-)", self)
-        self.btn_download_roi_series.clicked.connect(
-            self._trigger_download_timeseries_rois
-        )
-        mouse_layout.addWidget(self.btn_download_roi_series, 1, 0)  # , 1, 2)
-
-        # Download tumor labels timeseries
-        self.btn_download_labels_series = QPushButton("⏬ Tumor series (-)", self)
-        self.btn_download_labels_series.clicked.connect(
-            self._trigger_download_timeseries_labels
-        )
-        mouse_layout.addWidget(self.btn_download_labels_series, 1, 1)  # , 1, 2)
+        image_layout.addWidget(QLabel("Case", self), 0, 0)
+        image_layout.addWidget(self.cb_specimen, 0, 1)
 
         # Scan time
         self.cb_time = QComboBox()
         self.cb_time.currentTextChanged.connect(self._update_combobox_classes)
-        image_layout.addWidget(QLabel("Scan time", self), 0, 0)
-        image_layout.addWidget(self.cb_time, 0, 1)
+        image_layout.addWidget(QLabel("Scan time", self), 1, 0)
+        image_layout.addWidget(self.cb_time, 1, 1)
 
         # Images (data class)
         self.cb_image = QComboBox()
-        image_layout.addWidget(QLabel("Data category", self), 1, 0)
-        image_layout.addWidget(self.cb_image, 1, 1)
+        image_layout.addWidget(QLabel("Data category", self), 2, 0)
+        image_layout.addWidget(self.cb_image, 2, 1)
 
         # Download button
         btn_download = QPushButton("⏬ Download", self)
         btn_download.clicked.connect(self._trigger_download)
-        image_layout.addWidget(btn_download, 2, 0, 1, 2)
-        # image_layout.addWidget(btn_download, 1, 2)
+        image_layout.addWidget(btn_download, 3, 0, 1, 2)
 
         # Upload layer input
         self.cb_upload = QComboBox()
-        image_layout.addWidget(QLabel("Corrected data", self), 3, 0)
-        image_layout.addWidget(self.cb_upload, 3, 1)
-
-        # # Checkbox
-        # image_layout.addWidget(QLabel("Add `corrected` tag", self), 4, 0)
-        # self.check_add_corrected_tag = QCheckBox()
-        # self.check_add_corrected_tag.setChecked(True)
-        # image_layout.addWidget(self.check_add_corrected_tag, 4, 1)
+        image_layout.addWidget(QLabel("Corrected data", self), 4, 0)
+        image_layout.addWidget(self.cb_upload, 4, 1)
 
         # Upload button
         btn_upload_corrections = QPushButton("⏫ Upload", self)
@@ -390,22 +362,43 @@ class OMEROWidget(QWidget):
         tracking_layout.setContentsMargins(10, 10, 10, 10)
         tracking_layout.setAlignment(Qt.AlignTop)
 
+        tracking_layout.addWidget(QLabel("Selected case:", self), 0, 0)
+        self.label_selected_case_value = QLabel("-", self)
+        tracking_layout.addWidget(self.label_selected_case_value, 0, 1)
+        
+
         self.cb_track_labels = QComboBox()
-        tracking_layout.addWidget(QLabel("Tumor series", self), 0, 0)
-        tracking_layout.addWidget(self.cb_track_labels, 0, 1)
+        tracking_layout.addWidget(QLabel("Tumor series", self), 1, 0)
+        tracking_layout.addWidget(self.cb_track_labels, 1, 1)
+
+        # Download tumor labels timeseries
+        self.btn_download_labels_series = QPushButton("⏬ (-)", self)
+        self.btn_download_labels_series.clicked.connect(
+            self._trigger_download_timeseries_labels
+        )
+        tracking_layout.addWidget(self.btn_download_labels_series, 1, 2)
+
         self.cb_track_images = QComboBox()
-        tracking_layout.addWidget(QLabel("Image series", self), 1, 0)
-        tracking_layout.addWidget(self.cb_track_images, 1, 1)
-        tracking_layout.addWidget(QLabel("Align the scans before tracking", self), 2, 0)
+        tracking_layout.addWidget(QLabel("Image series", self), 2, 0)
+        tracking_layout.addWidget(self.cb_track_images, 2, 1)
+
+        # Download ROIs timeseries
+        self.btn_download_roi_series = QPushButton("⏬ (-)", self)
+        self.btn_download_roi_series.clicked.connect(
+            self._trigger_download_timeseries_rois
+        )
+        tracking_layout.addWidget(self.btn_download_roi_series, 2, 2)
+
+        tracking_layout.addWidget(QLabel("Align the scans before tracking", self), 3, 0, 1, 2)
         self.with_lungs_checkbox = QCheckBox()
         self.with_lungs_checkbox.setChecked(True)
-        tracking_layout.addWidget(self.with_lungs_checkbox, 2, 1)
+        tracking_layout.addWidget(self.with_lungs_checkbox, 3, 2)
         track_btn = QPushButton("Run tracking", self)
         track_btn.clicked.connect(self._trigger_tracking)
-        tracking_layout.addWidget(track_btn, 3, 0, 1, 2)
+        tracking_layout.addWidget(track_btn, 4, 0, 1, 3)
         track_csv_btn = QPushButton("Save as CSV", self)
         track_csv_btn.clicked.connect(self._save_track_csv)
-        tracking_layout.addWidget(track_csv_btn, 4, 0, 1, 2)
+        tracking_layout.addWidget(track_csv_btn, 5, 0, 1, 3)
 
         ### Generic upload tab
         generic_upload_layout = QGridLayout()
@@ -443,8 +436,8 @@ class OMEROWidget(QWidget):
         self.tabs = QTabWidget()
         self.tabs.addTab(tab1, "Login")
         self.tabs.addTab(tab2, "Data selection")
-        self.tabs.addTab(tab3, "Track tumors")
         self.tabs.addTab(tab4, "Download / Upload")
+        self.tabs.addTab(tab3, "Track tumors")
         layout.addWidget(self.tabs)
 
         # Progress bar
@@ -637,6 +630,10 @@ class OMEROWidget(QWidget):
         self.cb_specimen.addItems(project_specimens)
 
     def _update_combobox_times(self, specimen):
+        # Update the selected case label
+        self.label_selected_case_value.setText(f"Selected case: {specimen}")
+        # print(f"Selected case: {specimen}")
+
         self.cb_image.clear()
         sub_df = self.df[self.df["specimen"] == specimen]
         times = np.unique(sub_df["time"].tolist()).astype(str)
@@ -653,10 +650,10 @@ class OMEROWidget(QWidget):
         n_labels_timeseries = len(self.labels_timeseries_ids) - n_nans_labels_timeseries
 
         self.btn_download_roi_series.setText(
-            f"⏬ Image series({n_rois_timeseries} scans)"
+            f"⏬ {n_rois_timeseries} scans"
         )
         self.btn_download_labels_series.setText(
-            f"⏬ Tumor series ({n_labels_timeseries} scans)"
+            f"⏬ {n_labels_timeseries} scans"
         )
 
     def _update_combobox_classes(self, *args, **kwargs):
