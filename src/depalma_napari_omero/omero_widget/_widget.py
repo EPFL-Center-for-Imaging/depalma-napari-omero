@@ -311,23 +311,30 @@ class OMEROWidget(QWidget):
         self.cb_project.currentTextChanged.connect(self._handle_project_changed)
         experiment_layout.addWidget(self.cb_project, 0, 0, 1, 3)
 
+        # Model selection
+        self.cb_models = QComboBox()
+        for model_name in reversed(MODELS.keys()):
+            self.cb_models.addItem(model_name, model_name)
+        experiment_layout.addWidget(QLabel("Model", self), 1, 0)
+        experiment_layout.addWidget(self.cb_models, 1, 1, 1, 2)
+
         # Batch processing on experiment
         self.btn_batch_roi = QPushButton("🔁 Batch ROI (-)", self)
         self.btn_batch_roi.clicked.connect(self._start_batch_roi)
-        experiment_layout.addWidget(self.btn_batch_roi, 1, 0)
+        experiment_layout.addWidget(self.btn_batch_roi, 2, 0)
 
         self.btn_batch_nnunet = QPushButton("🔁 Batch detection (-)", self)
         self.btn_batch_nnunet.clicked.connect(self._start_batch_nnunet)
-        experiment_layout.addWidget(self.btn_batch_nnunet, 1, 1)
+        experiment_layout.addWidget(self.btn_batch_nnunet, 2, 1)
 
         self.btn_batch_both = QPushButton("🔁 Both", self)
         self.btn_batch_both.clicked.connect(self._start_both_batches)
-        experiment_layout.addWidget(self.btn_batch_both, 1, 2)
+        experiment_layout.addWidget(self.btn_batch_both, 2, 2)
 
         # Cancel button
         cancel_btn = QPushButton("❌ Cancel", self)
         cancel_btn.clicked.connect(self._handle_cancel)
-        experiment_layout.addWidget(cancel_btn, 2, 0, 1, 3)
+        experiment_layout.addWidget(cancel_btn, 3, 0, 1, 3)
 
         # Specimens (mouse)
         self.cb_specimen = QComboBox()
@@ -909,7 +916,13 @@ class OMEROWidget(QWidget):
     @thread_worker
     def _batch_nnunet(self, n_preds_to_compute):
         self.server.connect()
-        model = list(MODELS.keys())[0]
+
+        # model = list(MODELS.keys())[0]
+        model = self.cb_models.currentData()
+        if model is None:
+            print("Could not select a model for prediction.")
+            return
+        
         for k, (_, row) in enumerate(
             self.pred_missing[["dataset_id", "image_id", "image_name"]].iterrows()
         ):
@@ -1235,7 +1248,12 @@ class OMEROWidget(QWidget):
             tifffile.imwrite(str(dirname / f'SCAN{k:02d}.tif'), image)
 
         predictor = LungsPredictor()
-        model = list(MODELS.keys())[0]
+
+        # model = list(MODELS.keys())[0]
+        model = self.cb_models.currentData()
+        if model is None:
+            print("Could not select a model for prediction.")
+            return
 
         rois = []
         lungs_rois = []
