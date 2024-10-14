@@ -22,7 +22,7 @@ dependencies = [
     "napari-label-focus>=0.0.9",
     "napari-remove-objects",
     "napari-adaptive-painting", 
-    "mousetumornet",
+    "mousetumornet==0.0.6",
     "mouselungseg",
     "mousetumortrack",
     "ezomero==1.1.1",
