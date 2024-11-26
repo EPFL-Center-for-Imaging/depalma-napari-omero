@@ -910,8 +910,43 @@ class OMEROWidget(QWidget):
         worker.start()
 
     def _start_both_batches(self):
-        self._start_batch_roi()
-        self._start_batch_nnunet()
+        # Copy of the code for batch roi (for now)
+        if self.roi_missing is None:
+            return
+
+        n_rois_to_compute = len(self.roi_missing)
+        if n_rois_to_compute:
+            worker = self._batch_roi(n_rois_to_compute)
+            worker.returned.connect(self._project_update_after_batch_roi)  # Change the thread return event
+            worker.aborted.connect(self._threaded_project_update)
+            worker.yielded.connect(lambda step: self.pbar.setValue(step))
+            self.active_batch_workers.append(worker)
+            self.pbar.setMaximum(n_rois_to_compute)
+            self.pbar.setValue(0)
+            self._grayout_ui()
+            worker.start()
+        else:
+            print("No ROIs to compute.")
+
+    def _project_update_after_batch_roi(self):
+        # Update the projects before running a batch nnunet prediction (used when "Both" is clicked)
+        selected_project_name=self.cb_project.currentText()
+        if selected_project_name in ["", "Select from list"]:
+            return
+
+        self.server.connect()
+        self.project_id = self.server.projects[selected_project_name]
+        n_datasets = self.server.get_n_datasets_in_project(self.project_id)
+
+        worker = self._threaded_project_update()
+        worker.returned.connect(self._start_batch_nnunet)
+        worker.aborted.connect(self._ungrayout_ui)
+        worker.yielded.connect(lambda step: self.pbar.setValue(step))
+        self.active_batch_workers.append(worker)
+        self.pbar.setMaximum(n_datasets)
+        self.pbar.setValue(0)
+        self._grayout_ui()
+        worker.start()
 
     @thread_worker
     def _batch_nnunet(self, n_preds_to_compute):
@@ -967,6 +1002,7 @@ class OMEROWidget(QWidget):
 
     def _start_batch_nnunet(self):
         if self.pred_missing is None:
+            print(f"{self.pred_missing=}")
             return
 
         n_preds_to_compute = len(self.pred_missing)

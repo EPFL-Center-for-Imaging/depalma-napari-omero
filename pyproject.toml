@@ -19,7 +19,7 @@ dependencies = [
     "napari[all]>=0.4.16",
     "qtpy",
     "magicgui",
-    "napari-label-focus>=0.0.9",
+    "napari-label-focus>=0.1.4",
     "napari-remove-objects",
     "napari-adaptive-painting", 
     "mousetumornet==0.0.6",
@@ -31,6 +31,8 @@ dependencies = [
     "imagecodecs[all]",
     "tifffile",
     "pooch",
+    "blosc2",
+    "acvl-utils==0.2"
 ]
 
 [project.entry-points."napari.manifest"]
