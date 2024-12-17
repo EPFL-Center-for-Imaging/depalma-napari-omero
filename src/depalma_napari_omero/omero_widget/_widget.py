@@ -19,13 +19,14 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QFileDialog,
-    QCheckBox
+    QCheckBox,
 )
 
 from depalma_napari_omero.omero_server import OmeroServer
 
 from mousetumornet.configuration import MODELS
 from mousetumornet import predict, postprocess
+
 # from mousetumornet.roi import (
 #     compute_roi,
 # )  # This should be replaced by the lungs Yolo model.
@@ -37,6 +38,7 @@ OMERO_TAGS = {
     "roi": 182116,
     "pred_nnunet_v4": 206192,
 }
+
 
 def timeseries_ids(df, specimen_name):
     """Returns the indeces of the labeled images in a timeseries. Priority to images with the #corrected tag, otherwise #raw_pred is used."""
@@ -72,6 +74,7 @@ def timeseries_ids(df, specimen_name):
         labels_img_ids["image_id_rois"].tolist(),
         labels_img_ids["image_id_labels"].tolist(),
     )
+
 
 def image_timeseries_ids(df, specimen_name):
     """Returns the indeces of the labeled images in a timeseries. Priority to images with the #corrected tag, otherwise #raw_pred is used."""
@@ -376,7 +379,6 @@ class OMEROWidget(QWidget):
         tracking_layout.addWidget(QLabel("Selected case:", self), 0, 0)
         self.label_selected_case_value = QLabel("-", self)
         tracking_layout.addWidget(self.label_selected_case_value, 0, 1)
-        
 
         self.cb_track_labels = QComboBox()
         tracking_layout.addWidget(QLabel("Tumor series", self), 1, 0)
@@ -400,7 +402,9 @@ class OMEROWidget(QWidget):
         )
         tracking_layout.addWidget(self.btn_download_roi_series, 2, 2)
 
-        tracking_layout.addWidget(QLabel("Align the scans before tracking", self), 3, 0, 1, 2)
+        tracking_layout.addWidget(
+            QLabel("Align the scans before tracking", self), 3, 0, 1, 2
+        )
         self.with_lungs_checkbox = QCheckBox()
         self.with_lungs_checkbox.setChecked(True)
         tracking_layout.addWidget(self.with_lungs_checkbox, 3, 2)
@@ -662,12 +666,8 @@ class OMEROWidget(QWidget):
         n_nans_labels_timeseries = np.isnan(self.labels_timeseries_ids).any().sum()
         n_labels_timeseries = len(self.labels_timeseries_ids) - n_nans_labels_timeseries
 
-        self.btn_download_roi_series.setText(
-            f"⏬ {n_rois_timeseries} scans"
-        )
-        self.btn_download_labels_series.setText(
-            f"⏬ {n_labels_timeseries} scans"
-        )
+        self.btn_download_roi_series.setText(f"⏬ {n_rois_timeseries} scans")
+        self.btn_download_labels_series.setText(f"⏬ {n_labels_timeseries} scans")
 
     def _update_combobox_classes(self, *args, **kwargs):
         specimen = self.cb_specimen.currentText()
@@ -917,7 +917,9 @@ class OMEROWidget(QWidget):
         n_rois_to_compute = len(self.roi_missing)
         if n_rois_to_compute:
             worker = self._batch_roi(n_rois_to_compute)
-            worker.returned.connect(self._project_update_after_batch_roi)  # Change the thread return event
+            worker.returned.connect(
+                self._project_update_after_batch_roi
+            )  # Change the thread return event
             worker.aborted.connect(self._threaded_project_update)
             worker.yielded.connect(lambda step: self.pbar.setValue(step))
             self.active_batch_workers.append(worker)
@@ -930,7 +932,7 @@ class OMEROWidget(QWidget):
 
     def _project_update_after_batch_roi(self):
         # Update the projects before running a batch nnunet prediction (used when "Both" is clicked)
-        selected_project_name=self.cb_project.currentText()
+        selected_project_name = self.cb_project.currentText()
         if selected_project_name in ["", "Select from list"]:
             return
 
@@ -957,7 +959,7 @@ class OMEROWidget(QWidget):
         if model is None:
             print("Could not select a model for prediction.")
             return
-        
+
         for k, (_, row) in enumerate(
             self.pred_missing[["dataset_id", "image_id", "image_name"]].iterrows()
         ):
@@ -1040,7 +1042,9 @@ class OMEROWidget(QWidget):
             try:
                 # *_, roi = compute_roi_bones(image)
                 # *_, roi = compute_roi(image)
-                roi, lungs_roi = extract_3d_roi(image, predictor.fast_predict(image, skip_level=2))
+                roi, lungs_roi = extract_3d_roi(
+                    image, predictor.fast_predict(image, skip_level=2)
+                )
             except:
                 print(
                     f"An error occured while computing the ROI in this image: ID={image_id}. Skipping..."
@@ -1151,17 +1155,19 @@ class OMEROWidget(QWidget):
         self.viewer.add_labels(timeseries, name=f"{specimen_name}_labels")
 
     @thread_worker
-    def _threaded_tracking(self, labels_timeseries, labels_timeseries_name, image_timeseries=None):
+    def _threaded_tracking(
+        self, labels_timeseries, labels_timeseries_name, image_timeseries=None
+    ):
         with_lungs_registration = image_timeseries is not None
         linkage_df, grouped_df, timeseries_corrected = run_tracking(
             labels_timeseries,
             image_timeseries,
             with_lungs_registration=with_lungs_registration,
             method="laptrack",
-            max_dist_px=30, 
-            dist_weight_ratio=0.9, 
+            max_dist_px=30,
+            dist_weight_ratio=0.9,
             max_volume_diff_rel=1.0,
-            memory=0, 
+            memory=0,
         )
 
         return (labels_timeseries_name, timeseries_corrected, grouped_df)
@@ -1179,7 +1185,7 @@ class OMEROWidget(QWidget):
                 show_info("No image series found.")
             else:
                 image_timeseries = self.cb_track_images.currentData()
-                
+
         worker = self._threaded_tracking(timeseries, timeseries_name, image_timeseries)
         worker.returned.connect(self._tracking_returned)
         self.pbar.setMaximum(0)
@@ -1191,14 +1197,18 @@ class OMEROWidget(QWidget):
         timeseries_name, timeseries_corrected, grouped_df = payload
         self.grouped_df = grouped_df
         # Add layers to the viewer
-        self.viewer.add_labels(timeseries_corrected, name=f"{timeseries_name}_tracked", opacity=1.0)
-        self.viewer.layers[timeseries_name].visible = False  # Turn off visibility of the untracked labels layer
+        self.viewer.add_labels(
+            timeseries_corrected, name=f"{timeseries_name}_tracked", opacity=1.0
+        )
+        self.viewer.layers[timeseries_name].visible = (
+            False  # Turn off visibility of the untracked labels layer
+        )
 
     def _save_track_csv(self):
         if self.grouped_df is None:
             show_info("No tracking data found.")
             return
-        
+
         filename, _ = QFileDialog.getSaveFileName(self, "Save as CSV", ".", "*.csv")
         if not filename.endswith(".csv"):
             filename += ".csv"
@@ -1213,20 +1223,22 @@ class OMEROWidget(QWidget):
             f"{i} - SCAN{scan_id:02d}" for (i, scan_id) in pivoted.columns[1:]
         ]
 
-        volume_columns = [col for col in pivoted.columns if 'volume' in col]
-        label_columns = [col for col in pivoted.columns if 'label' in col]
+        volume_columns = [col for col in pivoted.columns if "volume" in col]
+        label_columns = [col for col in pivoted.columns if "label" in col]
 
         # Fold change
         initial_volume_col = volume_columns[0]
         for k, volume_col in enumerate(volume_columns[1:]):
-            pivoted[f"fold change - SCAN01 to SCAN{(k+2):02d}"] = (pivoted[volume_col] - pivoted[initial_volume_col]) / pivoted[initial_volume_col]
+            pivoted[f"fold change - SCAN01 to SCAN{(k+2):02d}"] = (
+                pivoted[volume_col] - pivoted[initial_volume_col]
+            ) / pivoted[initial_volume_col]
 
         # Re-order the columns
-        columns_order = ['Tumor ID']
+        columns_order = ["Tumor ID"]
         for volume_col, label_col in zip(volume_columns, label_columns):
             columns_order.append(label_col)
             columns_order.append(volume_col)
-        fold_change_columns = [col for col in pivoted.columns if 'fold' in col]
+        fold_change_columns = [col for col in pivoted.columns if "fold" in col]
         for fold_col in fold_change_columns:
             columns_order.append(fold_col)
         pivoted = pivoted[columns_order]
@@ -1265,7 +1277,7 @@ class OMEROWidget(QWidget):
         specimen = self.cb_specimen.currentText()
         if specimen == "":
             return
-        
+
         dirname = QFileDialog.getExistingDirectory(self, "Output directory", ".")
         dirname = Path(dirname)
         print(dirname)
@@ -1279,9 +1291,12 @@ class OMEROWidget(QWidget):
     @thread_worker
     def _full_pipeline_thread(self, dirname, specimen):
         to_download_image_timeseries_ids = image_timeseries_ids(self.df, specimen)
-        images = [self.server.download_image(img_id) for img_id in to_download_image_timeseries_ids]
+        images = [
+            self.server.download_image(img_id)
+            for img_id in to_download_image_timeseries_ids
+        ]
         for k, image in enumerate(images):
-            tifffile.imwrite(str(dirname / f'SCAN{k:02d}.tif'), image)
+            tifffile.imwrite(str(dirname / f"SCAN{k:02d}.tif"), image)
 
         predictor = LungsPredictor()
 
@@ -1295,7 +1310,9 @@ class OMEROWidget(QWidget):
         lungs_rois = []
         tumors_rois = []
         for k, image in enumerate(images):
-            roi, lungs_roi = extract_3d_roi(image, predictor.fast_predict(image, skip_level=2))
+            roi, lungs_roi = extract_3d_roi(
+                image, predictor.fast_predict(image, skip_level=2)
+            )
 
             tumors_mask = predict(roi, model)
             tumors_mask = postprocess(tumors_mask)
@@ -1311,9 +1328,9 @@ class OMEROWidget(QWidget):
         tumor_timeseries = tumor_timeseries.astype(int)
         lungs_timeseries = lungs_timeseries.astype(int)
 
-        tifffile.imwrite(str(dirname / 'rois_timeseries.tif'), rois_timeseries)
-        tifffile.imwrite(str(dirname / 'lungs_timeseries.tif'), lungs_timeseries)
-        tifffile.imwrite(str(dirname / 'tumor_timeseries.tif'), tumor_timeseries)
+        tifffile.imwrite(str(dirname / "rois_timeseries.tif"), rois_timeseries)
+        tifffile.imwrite(str(dirname / "lungs_timeseries.tif"), lungs_timeseries)
+        tifffile.imwrite(str(dirname / "tumor_timeseries.tif"), tumor_timeseries)
 
         linkage_df, grouped_df, tumor_timeseries_corrected = run_tracking(
             tumor_timeseries,
@@ -1321,17 +1338,17 @@ class OMEROWidget(QWidget):
             lungs_timeseries,
             with_lungs_registration=True,
             method="laptrack",
-            max_dist_px=30, 
-            dist_weight_ratio=0.9, 
+            max_dist_px=30,
+            dist_weight_ratio=0.9,
             max_volume_diff_rel=1.0,
-            memory=0, 
+            memory=0,
         )
 
-        tifffile.imwrite(str(dirname / 'tumor_timeseries_corrected.tif'), tumor_timeseries_corrected)
+        tifffile.imwrite(
+            str(dirname / "tumor_timeseries_corrected.tif"), tumor_timeseries_corrected
+        )
 
-        formatted_df = grouped_df.reset_index()[
-            ["tumor", "scan", "volume", "label"]
-        ]
+        formatted_df = grouped_df.reset_index()[["tumor", "scan", "volume", "label"]]
         pivoted = formatted_df.pivot(
             index="tumor", columns="scan", values=["volume", "label"]
         ).reset_index()
@@ -1339,30 +1356,42 @@ class OMEROWidget(QWidget):
             f"{i} - SCAN{scan_id:02d}" for (i, scan_id) in pivoted.columns[1:]
         ]
 
-        volume_columns = [col for col in pivoted.columns if 'volume' in col]
-        label_columns = [col for col in pivoted.columns if 'label' in col]
+        volume_columns = [col for col in pivoted.columns if "volume" in col]
+        label_columns = [col for col in pivoted.columns if "label" in col]
 
         # Fold change
         initial_volume_col = volume_columns[0]
         for k, volume_col in enumerate(volume_columns[1:]):
-            pivoted[f"fold change - SCAN01 to SCAN{(k+2):02d}"] = (pivoted[volume_col] - pivoted[initial_volume_col]) / pivoted[initial_volume_col]
+            pivoted[f"fold change - SCAN01 to SCAN{(k+2):02d}"] = (
+                pivoted[volume_col] - pivoted[initial_volume_col]
+            ) / pivoted[initial_volume_col]
 
         # Re-order the columns
-        columns_order = ['Tumor ID']
+        columns_order = ["Tumor ID"]
         for volume_col, label_col in zip(volume_columns, label_columns):
             columns_order.append(label_col)
             columns_order.append(volume_col)
-        fold_change_columns = [col for col in pivoted.columns if 'fold' in col]
+        fold_change_columns = [col for col in pivoted.columns if "fold" in col]
         for fold_col in fold_change_columns:
             columns_order.append(fold_col)
         pivoted = pivoted[columns_order]
 
-        pivoted.to_csv(str(dirname / f'{specimen}_results.csv'))
+        pivoted.to_csv(str(dirname / f"{specimen}_results.csv"))
 
-        return (rois_timeseries, lungs_timeseries, tumor_timeseries, tumor_timeseries_corrected)
+        return (
+            rois_timeseries,
+            lungs_timeseries,
+            tumor_timeseries,
+            tumor_timeseries_corrected,
+        )
 
     def _full_pipeline_returned(self, payload):
-        rois_timeseries, lungs_timeseries, tumor_timeseries, tumor_timeseries_corrected = payload
+        (
+            rois_timeseries,
+            lungs_timeseries,
+            tumor_timeseries,
+            tumor_timeseries_corrected,
+        ) = payload
         self.viewer.add_image(rois_timeseries)
         lungs_layer = self.viewer.add_labels(lungs_timeseries)
         lungs_layer.visible = False

@@ -24,7 +24,7 @@ dependencies = [
     "napari-adaptive-painting", 
     "mousetumornet==0.0.6",
     "mouselungseg",
-    "mousetumortrack",
+    "mousetumortrack>=0.0.3",
     "ezomero==1.1.1",
     "numpy",
     "pandas",
