@@ -48,6 +48,8 @@ This project is licensed under the [AGPL-3](LICENSE) license.
 
 This project depends on the [ultralytics](https://github.com/ultralytics/ultralytics) package which is licensed under AGPL-3.
 
+This project uses the [PyApp](https://github.com/ofek/pyapp) software for creating a runtime installer.
+
 ## Related projects
 
 - [Mouse Tumor Net](https://github.com/EPFL-Center-for-Imaging/mousetumornet) | Detect tumor nodules in mice CT scans.
