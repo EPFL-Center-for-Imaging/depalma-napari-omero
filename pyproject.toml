@@ -17,22 +17,18 @@ classifiers = [
 
 dependencies = [
     "napari[all]>=0.4.16",
-    "qtpy",
-    "magicgui",
-    "napari-label-focus>=0.1.4",
-    "napari-remove-objects",
-    "napari-adaptive-painting", 
-    "mousetumornet==0.0.6",
-    "mouselungseg",
-    "mousetumortrack>=0.0.3",
     "ezomero==1.1.1",
     "numpy",
     "pandas",
-    "imagecodecs[all]",
     "tifffile",
     "pooch",
-    "blosc2",
-    "acvl-utils==0.2"
+    "napari-label-focus>=0.1.4",
+    "napari-remove-objects",
+    "napari-adaptive-painting", 
+    # "mousetumorpy",
+    # "imagecodecs[all]",
+    # "acvl-utils==0.2"
+    # "blosc2",
 ]
 
 [project.entry-points."napari.manifest"]

@@ -22,22 +22,17 @@ from qtpy.QtWidgets import (
     QCheckBox,
 )
 
+from mousetumorpy import (
+    LungsPredictor,
+    TumorPredictor,
+    NNUNET_MODELS,
+    YOLO_MODELS,
+    combine_images,
+    run_tracking,
+)
+
 from depalma_napari_omero.omero_server import OmeroServer
-
-from mousetumornet.configuration import MODELS
-from mousetumornet import predict, postprocess
-
-# from mousetumornet.roi import (
-#     compute_roi,
-# )  # This should be replaced by the lungs Yolo model.
-from mouselungseg import LungsPredictor, extract_3d_roi
-from mousetumortrack import run_tracking
-
-OMERO_TAGS = {
-    "corrected": 113885,
-    "roi": 182116,
-    "pred_nnunet_v4": 206192,
-}
+from depalma_napari_omero.configuration import OMERO_TAGS
 
 
 def timeseries_ids(df, specimen_name):
@@ -84,25 +79,6 @@ def image_timeseries_ids(df, specimen_name):
     image_img_ids.sort_values(by="time", ascending=True, inplace=True)
 
     return image_img_ids["image_id"].tolist()
-
-
-def combine_images(image_array_list):
-    """Inserts images at different times, of different shapes, into a single (TZYX) array."""
-    n_images = len(image_array_list)
-    image_shapes = np.stack([np.array(img.shape) for img in image_array_list])
-    output_shape = [n_images]
-    output_shape.extend(list(np.max(image_shapes, axis=0)))
-
-    timeseries = np.empty(output_shape, dtype=np.float32)
-    for k, (image, image_shape) in enumerate(zip(image_array_list, image_shapes)):
-        delta = (output_shape[1:] - image_shape) // 2
-        timeseries[k][
-            delta[0] : delta[0] + image_shape[0],
-            delta[1] : delta[1] + image.shape[1],
-            delta[2] : delta[2] + image.shape[2],
-        ] = image
-
-    return timeseries
 
 
 def parse_df(df):
@@ -316,7 +292,7 @@ class OMEROWidget(QWidget):
 
         # Model selection
         self.cb_models = QComboBox()
-        for model_name in reversed(MODELS.keys()):
+        for model_name in reversed(NNUNET_MODELS.keys()):
             self.cb_models.addItem(model_name, model_name)
         experiment_layout.addWidget(QLabel("Model", self), 1, 0)
         experiment_layout.addWidget(self.cb_models, 1, 1, 1, 2)
@@ -977,10 +953,8 @@ class OMEROWidget(QWidget):
             image = self.server.download_image(image_id)
 
             try:
-                image_pred = predict(
-                    image, model=model
-                )  # Note: No external normalization for nnUNet-v4
-                image_pred = postprocess(image_pred)
+                predictor = TumorPredictor(model)
+                image_pred = predictor.predict(image)
             except:
                 print(
                     f"An error occured while computing the NNUNET prediction in this image: ID={image_id}."
@@ -1040,11 +1014,9 @@ class OMEROWidget(QWidget):
             image = self.server.download_image(image_id)
 
             try:
-                # *_, roi = compute_roi_bones(image)
-                # *_, roi = compute_roi(image)
-                roi, lungs_roi = extract_3d_roi(
-                    image, predictor.fast_predict(image, skip_level=2)
-                )
+                model = list(YOLO_MODELS.keys())[0]  # There is only one model, for now
+                predictor = LungsPredictor(model)
+                roi, lungs_roi = predictor.compute_3d_roi(image)  # Note - this is not doing any skip-level (set to 2 before)
             except:
                 print(
                     f"An error occured while computing the ROI in this image: ID={image_id}. Skipping..."
@@ -1300,7 +1272,6 @@ class OMEROWidget(QWidget):
 
         predictor = LungsPredictor()
 
-        # model = list(MODELS.keys())[0]
         model = self.cb_models.currentData()
         if model is None:
             print("Could not select a model for prediction.")
@@ -1310,12 +1281,11 @@ class OMEROWidget(QWidget):
         lungs_rois = []
         tumors_rois = []
         for k, image in enumerate(images):
-            roi, lungs_roi = extract_3d_roi(
-                image, predictor.fast_predict(image, skip_level=2)
-            )
+            predictor = LungsPredictor(list(YOLO_MODELS.keys())[0])
+            roi, lungs_roi = predictor.compute_3d_roi(image)  # Note - this is not doing any skip-level (set to 2 before)
 
-            tumors_mask = predict(roi, model)
-            tumors_mask = postprocess(tumors_mask)
+            predictor = TumorPredictor(model)
+            tumors_mask = predictor.predict(image)
 
             rois.append(roi)
             lungs_rois.append(lungs_roi)
@@ -1325,14 +1295,11 @@ class OMEROWidget(QWidget):
         lungs_timeseries = combine_images(lungs_rois)
         tumor_timeseries = combine_images(tumors_rois)
 
-        tumor_timeseries = tumor_timeseries.astype(int)
-        lungs_timeseries = lungs_timeseries.astype(int)
-
         tifffile.imwrite(str(dirname / "rois_timeseries.tif"), rois_timeseries)
         tifffile.imwrite(str(dirname / "lungs_timeseries.tif"), lungs_timeseries)
         tifffile.imwrite(str(dirname / "tumor_timeseries.tif"), tumor_timeseries)
 
-        linkage_df, grouped_df, tumor_timeseries_corrected = run_tracking(
+        df, tumor_timeseries_corrected = run_tracking(
             tumor_timeseries,
             rois_timeseries,
             lungs_timeseries,
@@ -1348,35 +1315,7 @@ class OMEROWidget(QWidget):
             str(dirname / "tumor_timeseries_corrected.tif"), tumor_timeseries_corrected
         )
 
-        formatted_df = grouped_df.reset_index()[["tumor", "scan", "volume", "label"]]
-        pivoted = formatted_df.pivot(
-            index="tumor", columns="scan", values=["volume", "label"]
-        ).reset_index()
-        pivoted.columns = ["Tumor ID"] + [
-            f"{i} - SCAN{scan_id:02d}" for (i, scan_id) in pivoted.columns[1:]
-        ]
-
-        volume_columns = [col for col in pivoted.columns if "volume" in col]
-        label_columns = [col for col in pivoted.columns if "label" in col]
-
-        # Fold change
-        initial_volume_col = volume_columns[0]
-        for k, volume_col in enumerate(volume_columns[1:]):
-            pivoted[f"fold change - SCAN01 to SCAN{(k+2):02d}"] = (
-                pivoted[volume_col] - pivoted[initial_volume_col]
-            ) / pivoted[initial_volume_col]
-
-        # Re-order the columns
-        columns_order = ["Tumor ID"]
-        for volume_col, label_col in zip(volume_columns, label_columns):
-            columns_order.append(label_col)
-            columns_order.append(volume_col)
-        fold_change_columns = [col for col in pivoted.columns if "fold" in col]
-        for fold_col in fold_change_columns:
-            columns_order.append(fold_col)
-        pivoted = pivoted[columns_order]
-
-        pivoted.to_csv(str(dirname / f"{specimen}_results.csv"))
+        df.to_csv(str(dirname / f"{specimen}_results.csv"))
 
         return (
             rois_timeseries,
