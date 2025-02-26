@@ -10,9 +10,7 @@ import tifffile
 from pathlib import Path
 import pooch
 
-OMERO_HOST = "omero-server.epfl.ch"
-OMERO_PORT = 4064
-OMERO_GROUP = "imaging-updepalma"
+from depalma_napari_omero.configuration import OMERO_HOST, OMERO_PORT, OMERO_GROUP
 
 class OmeroServer:
     def __init__(self) -> None:

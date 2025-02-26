@@ -546,7 +546,7 @@ class OMEROWidget(QWidget):
         dataset_names = []
         image_ids = []
         image_names = []
-        specimens = []
+        specimens = []  
         times = []
         time_tags = []
         image_classes = []

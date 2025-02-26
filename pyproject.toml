@@ -31,6 +31,9 @@ dependencies = [
     # "blosc2",
 ]
 
+[project.scripts]
+dno = "depalma_napari_omero.cli:main"
+
 [project.entry-points."napari.manifest"]
 depalma-napari-omero = "depalma_napari_omero:napari.yaml"
 
