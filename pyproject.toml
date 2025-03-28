@@ -17,7 +17,8 @@ classifiers = [
 
 dependencies = [
     "napari[all]>=0.4.16",
-    "ezomero==1.1.1",
+    # "ezomero==1.1.1",
+    "ezomero",  # TODO: Check that this works!
     "numpy",
     "pandas",
     "tifffile",
@@ -25,6 +26,10 @@ dependencies = [
     "napari-label-focus>=0.1.4",
     "napari-remove-objects",
     "napari-adaptive-painting", 
+    "questionary",
+    "aicsimageio",
+    "imaging_server_kit>=0.0.6",
+    "napari-toolkit",
     # "mousetumorpy",
     # "imagecodecs[all]",
     # "acvl-utils==0.2"

@@ -1,262 +1,209 @@
 import os
 import argparse
 import questionary
-import skimage.io
-from pathlib import Path
 
-from mousetumorpy import YOLO_MODELS, NNUNET_MODELS
+from depalma_napari_omero.omero_server._project import (
+    OmeroController,
+    OmeroProjectManager,
+)
+from depalma_napari_omero.omero_server.server_config import (
+    OMERO_GROUP,
+    OMERO_HOST,
+    OMERO_PORT,
+)
 
-LUNGS_MODELS = list(YOLO_MODELS.keys())
-TUMOR_MODELS = list(NNUNET_MODELS.keys())
-
-from mousetumorpy import LungsPredictor, TumorPredictor, combine_images, run_tracking
-from depalma_napari_omero.omero_server import OmeroServer
-from depalma_napari_omero.project import ProjectRepresentation
-
+def cli_menu(func):
+    def wrapper(*args, **kwargs):
+        while True:
+            clear_screen()
+            out = func(*args, **kwargs)
+            if out in ["Back", "back", "🔙 Back"]:
+                break
+    return wrapper
 
 def clear_screen():
     """Clears the terminal screen."""
     os.system("cls" if os.name == "nt" else "clear")
 
-
-def handle_exit(server):
+def handle_exit(controller):
     print("Bye!")
-    server.quit()
+    controller.quit()
     exit(0)
 
-
-def handle_login(server):
+def handle_login() -> OmeroController:
+    """Login to OMERO with username and password"""
     clear_screen()
-    # Login to OMERO with username and password
     max_attempts = 3
     for n_attempts in range(max_attempts):
         user = questionary.text("OMERO username:").ask()
         password = questionary.password("OMERO password:").ask()
 
-        server.login(user, password)
+        compute_server_url = os.getenv("COMPUTE_SERVER_URL", None)
 
-        connect_status = server.connect()
+        controller = OmeroController(
+            host=OMERO_HOST,
+            group=OMERO_GROUP,
+            port=OMERO_PORT,
+            user=user,
+            password=password,
+            compute_server_url=compute_server_url,
+        )
 
+        connect_status = controller.connect()
         if connect_status:
             break
         else:
+            print(f"{connect_status=}")
             if n_attempts + 1 > max_attempts:
                 print(f"Failed to connect {max_attempts} times in a row. Exiting...")
-                server.quit()
+                controller.quit()
                 exit(0)
 
-    return server
+    return controller
 
+@cli_menu
+def project_menu(project: OmeroProjectManager):
+    project.print_summary()
 
-def project_menu(server, project: ProjectRepresentation):
-    while True:
+    project_choices = {
+        "🔙 Back": "back",
+        "🔁 Run all workflows": "run_workflows",
+        f"🐭 Select cases ({len(project.cases)})": "select_cases",
+        "⏫ Import a new raw scan": "create_new_dataset",
+        f"": "",
+    }
+
+    selected_project_option = questionary.select(
+        f"What to do next?",
+        choices=list(project_choices.keys()),
+    ).ask()
+
+    selected_option = project_choices.get(selected_project_option)
+
+    if selected_option == "run_workflows":
         clear_screen()
-
-        project.print_summary()
-
-        project_choices = {
-            "Back": "back",
-            f"Update ROIs ({len(project.roi_missing)})": "update_rois",
-            f"Update Tumor predictions ({len(project.pred_missing)})": "update_preds",
-            f"Update ROIs ({len(project.roi_missing)}) and Tumor predictions ({len(project.pred_missing)})": "update_rois_and_preds",
-            f"Select cases ({len(project.cases)})": "select_cases",
-        }
-
-        selected_project_option = questionary.select(
-            f"What to do next?",
-            choices=list(project_choices.keys()),
-        ).ask()
-
-        choice_made = project_choices.get(selected_project_option)
-
-        if choice_made == "back":
-            break
-
-        elif choice_made == "update_rois":
-            clear_screen()
-            lungs_model = questionary.select(
-                "Lungs detection model", choices=LUNGS_MODELS
-            ).ask()
-            project.batch_roi(lungs_model)
-            input("\nPress Enter to return to the previous menu...")
-
-        elif choice_made == "update_preds":
-            clear_screen()
-            tumor_model = questionary.select(
-                "Tumor detection model", choices=TUMOR_MODELS
-            ).ask()
-            project.batch_nnunet(tumor_model)
-            input("\nPress Enter to return to the previous menu...")
-
-        elif choice_made == "update_rois_and_preds":
-            clear_screen()
-            lungs_model = questionary.select(
-                "Lungs detection model", choices=LUNGS_MODELS
-            ).ask()
-            clear_screen()
-            tumor_model = questionary.select(
-                "Tumor detection model", choices=TUMOR_MODELS
-            ).ask()
-            project.batch_roi(lungs_model)
-            project.batch_nnunet(tumor_model)
-            input("\nPress Enter to return to the previous menu...")
-
-        elif choice_made == "select_cases":
-            while True:
-                clear_screen()
-                choices = ["Back"] + project.cases
-                selected_case = questionary.select(
-                    "Select a case to work on", choices=choices
+        if len(project.roi_missing) | len(project.pred_missing):
+            if len(project.roi_missing) != 0:
+                lungs_model = questionary.select(
+                    "Lungs detection model",
+                    choices=project.lungs_models,
                 ).ask()
-                if selected_case == "Back":
-                    break
-                else:
-                    case_menu(server, selected_case, project)
-
-
-def case_menu(server, selected_case, project):
-    while True:
-        clear_screen()
-
-        print(f"Selected case: {selected_case}")
-
-        case_choices = {
-            "Back": "back",
-            # "Track case": "track_case",
-            # "Download case time series": "download_timeseries",
-            "Run full pipeline on case": "full_pipeline",
-        }
-
-        selected_case_option = questionary.select(
-            f"What to do next?",
-            choices=list(case_choices.keys()),
-        ).ask()
-
-        choice_made = case_choices.get(selected_case_option)
-
-        if choice_made == "back":
-            break
-        # elif choice_made == "track_case":
-        #     print("Tracking...")
-        #     input("\nPress Enter to return to the previous menu...")
-        # elif choice_made == "download_timeseries":
-        #     print("Downloading...")
-        #     input("\nPress Enter to return to the previous menu...")
-        elif choice_made == "full_pipeline":
-            # Output folder?
-            # ...
-            lungs_model = questionary.select(
-                "Lungs detection model", choices=LUNGS_MODELS
-            ).ask()
+                clear_screen()
             tumor_model = questionary.select(
-                "Tumor detection model", choices=TUMOR_MODELS
+                "Tumor detection model",
+                choices=project.tumor_models,
             ).ask()
-            out_folder = questionary.path(
-                "Output path",
-                default="questionary",
-                only_directories=True,
-            ).ask()
+            if len(project.roi_missing) != 0:
+                project.batch_roi(lungs_model, ask_confirm=False)
+            project.batch_nnunet(tumor_model, ask_confirm=False)
 
-            if not os.path.exists(out_folder):
-                os.makedirs(out_folder)
-                print("Created the output folder: ", out_folder)
-            
-            out_folder = Path(out_folder)
+        project.batch_track()
+        input("\n✅ Press [Enter] to return to the previous menu...")
 
-            to_download_image_timeseries_ids = project.image_timeseries_ids(
-                selected_case
-            )
+    elif selected_option == "select_cases":
+        select_case_menu(project)
 
-            images = [
-                server.download_image(img_id)
-                for img_id in to_download_image_timeseries_ids
-            ]
-
-            for k, image in enumerate(images):
-                out_file = str(out_folder / f"SCAN{k:02d}.tif")
-                skimage.io.imsave(out_file, image)
-
-            # clear_screen()
-
-            predictor = LungsPredictor(lungs_model)
-
-            rois = []
-            lungs_rois = []
-            for k, image in enumerate(images):
-                roi, lungs_roi = predictor.compute_3d_roi(image)
-                rois.append(roi)
-                lungs_rois.append(lungs_roi)
-
-            rois_timeseries = combine_images(rois)
-            skimage.io.imsave(str(out_folder / "rois_timeseries.tif"), rois_timeseries)
-
-            lungs_timeseries = combine_images(lungs_rois)
-            skimage.io.imsave(
-                str(out_folder / "lungs_timeseries.tif"), lungs_timeseries
-            )
-
-            # clear_screen()
-
-            predictor = TumorPredictor(tumor_model)
-
-            tumors_rois = []
-            for k, image in enumerate(images):
-                tumor_mask = predictor.predict(image)
-                tumors_rois.append(tumor_mask)
-
-            tumor_timeseries = combine_images(tumors_rois)
-            skimage.io.imsave(
-                str(out_folder / "tumor_timeseries.tif"), tumor_timeseries
-            )
-
-            # Align before tracking?
-            # ...
-
-            pivoted_df, tumor_timeseries_corrected = run_tracking(
-                tumor_timeseries,
-                rois_timeseries,
-                lungs_timeseries,
-                with_lungs_registration=True,  # Optional?
-                method="laptrack",
-                max_dist_px=30,
-                dist_weight_ratio=0.9,
-                max_volume_diff_rel=1.0,
-                memory=0,
-            )
-
-            skimage.io.imsave(
-                str(out_folder / "tumor_timeseries_corrected.tif"),
-                tumor_timeseries_corrected,
-            )
-
-            pivoted_df.to_csv(str(out_folder / f"{selected_case}_results.csv"))
-
-
-def interactive(server: OmeroServer):
-    while True:
-        clear_screen()
-
-        project_choices = {"Exit": None}
-        for project_name, project_id in server.projects.items():
-            project_choices[f"{project_id} - {project_name}"] = (
-                project_id,
-                project_name,
-            )
-
-        selected_option = questionary.select(
-            "Select an OMERO Project to work on",
-            choices=list(project_choices.keys()),
+    elif selected_option == "create_new_dataset":
+        specimen_name = questionary.text(
+            "Specimen name?",
+            default="C00001",
         ).ask()
-        if selected_option == "Exit":
-            handle_exit(server)
+
+        scan_time = questionary.select(
+            "Scan time?",
+            choices=[
+                "prescan",
+                "scan01",
+                "scan02",
+                "scan03",
+                "scan04",
+                "scan05",
+            ],
+        ).ask()
+
+        image_file = questionary.path("Path to the image file").ask()
+
+        confirm = input("\n✅ Press any key to confirm or [n] to cancel:").strip().lower()
+
+        if confirm == "n":
+            print("❌ Cancelled.")
         else:
-            selected_project_id, selected_project_name = project_choices[
-                selected_option
-            ]
-            project = ProjectRepresentation(
-                server, selected_project_id, selected_project_name
+            project.upload_new_scan(
+                image_file=image_file,
+                scan_time=scan_time,
+                specimen_name=specimen_name,
             )
-            project_menu(server, project)
+
+            input("\n✅ Press [Enter] to return to the previous menu...")
+
+    return selected_option
+
+@cli_menu
+def select_case_menu(project):
+    choices = ["🔙 Back"] + project.cases
+
+    selected_case = questionary.select(
+        "Select a case to work on", choices=choices
+    ).ask()
+
+    if selected_case in project.cases:
+        case_menu(selected_case, project)
+
+    return selected_case
+
+@cli_menu
+def case_menu(selected_case, project):
+    print("\n" + "=" * 60)
+    print(f"🐭 Selected case: {selected_case}")
+
+    case_choices = {
+        "🔙 Back": "back",
+        "⏬ Download case data locally": "download_case",
+    }
+
+    selected_case_option = questionary.select(
+        f"What to do next?",
+        choices=list(case_choices.keys()),
+    ).ask()
+
+    selected_option = case_choices.get(selected_case_option)
+
+    if selected_option == "download_case":
+        out_folder = questionary.path(
+            "Output path",
+            default="questionary",
+            only_directories=True,
+        ).ask()
+
+        project.download_case(selected_case, out_folder)
+
+    return selected_option
+
+
+@cli_menu
+def interactive(controller: OmeroController):
+    project_choices = {"🚪 Exit": None}
+    for project_name, project_id in controller.projects.items():
+        project_choices[f"{project_id} - {project_name}"] = (
+            project_id,
+            project_name,
+        )
+
+    selected_option = questionary.select(
+        "Select an OMERO Project to work on",
+        choices=list(project_choices.keys()),
+    ).ask()
+
+    if selected_option == "🚪 Exit":
+        handle_exit(controller)
+
+    selected_project_id, selected_project_name = project_choices[selected_option]
+
+    controller.set_project(selected_project_id, selected_project_name, launch_scan=True)
+
+    project_menu(controller.project_manager)
+
+    return selected_option
 
 
 def main():
@@ -268,8 +215,8 @@ def main():
     args = parser.parse_args()
 
     if args.command == "interactive":
-        server = handle_login(OmeroServer())
-        interactive(server)
+        controller = handle_login()
+        interactive(controller)
     else:
         parser.print_help()
 
