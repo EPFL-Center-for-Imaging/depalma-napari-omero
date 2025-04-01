@@ -12,6 +12,8 @@ from depalma_napari_omero.omero_server.server_config import (
     OMERO_PORT,
 )
 
+from mousetumorpy import NNUNET_MODELS, YOLO_MODELS
+
 def cli_menu(func):
     def wrapper(*args, **kwargs):
         while True:
@@ -206,17 +208,64 @@ def interactive(controller: OmeroController):
     return selected_option
 
 
+def run_all_workflows(controller: OmeroController, project_id: int, lungs_model: str, tumor_model: str):
+    """Run all workflows on a given OMERO project"""   
+    found_project_name = None
+    for project_name, omero_project_id in controller.projects.items():
+        if project_id == omero_project_id:
+            found_project_name = project_name
+    if found_project_name is None:
+        raise ValueError(f"Could not find project with this ID among the projects: {project_id} (Available projects: {list(controller.projects.values())})")
+    
+    controller.set_project(project_id, found_project_name, launch_scan=True)
+
+    project = controller.project_manager
+    
+    project.print_summary()
+
+    if len(project.roi_missing) | len(project.pred_missing):
+        if len(project.roi_missing):
+            project.batch_roi(lungs_model, ask_confirm=False)
+        project.batch_nnunet(tumor_model, ask_confirm=False)
+    project.batch_track()
+
+
 def main():
     parser = argparse.ArgumentParser(description="OMERO - Mousetumorpy CLI")
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("interactive", help="Start the interactive mode")
 
+    run_parser = subparsers.add_parser("run", help="Run all workflows on an OMERO project")
+
+    run_parser.add_argument(
+        "project_id",
+        help="OMERO Project ID",
+        type=int,
+    )
+
+    run_parser.add_argument(
+        "--lungs-model",
+        default="v1",
+        choices=list(YOLO_MODELS.keys()),
+        help="Lungs model to use",
+    )
+
+    run_parser.add_argument(
+        "--tumor-model",
+        default="oct24",
+        choices=list(NNUNET_MODELS.keys()),
+        help="Tumor model to use",
+    )
+
     args = parser.parse_args()
 
     if args.command == "interactive":
         controller = handle_login()
         interactive(controller)
+    elif args.command == "run":
+        controller = handle_login()
+        run_all_workflows(controller, args.project_id, args.lungs_model, args.tumor_model)
     else:
         parser.print_help()
 

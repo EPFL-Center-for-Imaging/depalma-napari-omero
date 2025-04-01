@@ -31,9 +31,6 @@ dependencies = [
     "imaging_server_kit>=0.0.6",
     "napari-toolkit",
     # "mousetumorpy",
-    # "imagecodecs[all]",
-    # "acvl-utils==0.2"
-    # "blosc2",
 ]
 
 [project.scripts]

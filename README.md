@@ -36,10 +36,26 @@ pip install -e .
 
 ## Usage
 
+**In Napari**
+
 From the command-line, start Napari with the `depalma-napari-omero` plugin:
 
 ```
 napari -w depalma-napari-omero
+```
+
+**As a CLI**
+
+In interactive mode:
+
+```
+dno interactive
+```
+
+To run all workflows on a given project ID:
+
+```
+dno run <project_id> --lungs-model v1 --tumor-model oct24
 ```
 
 ## License
@@ -52,7 +68,5 @@ This project uses the [PyApp](https://github.com/ofek/pyapp) software for creati
 
 ## Related projects
 
-- [Mouse Tumor Net](https://github.com/EPFL-Center-for-Imaging/mousetumornet) | Detect tumor nodules in mice CT scans.
-- [Mouse Lungs Seg](https://github.com/EPFL-Center-for-Imaging/mouselungseg) | Detect the lungs cavity in mice CT scans.
-- [Mouse Tumor Track](https://github.com/EPFL-Center-for-Imaging/mousetumortrack) | Track tumor nodules in mice CT scans.
-- [JupyterHub (De Palma)](https://gitlab.com/epfl-center-for-imaging/depalma-jupyterhub) | A tailored JupyterHub deployment.
+- [Mousetumorpy]()
+- [Napari-mousetumorpy]()
