@@ -17,7 +17,7 @@ from ezomero.rois import Polygon
 import geojson
 import imaging_server_kit as sk
 
-from depalma_napari_omero.omero_server.server_config import (
+from depalma_napari_omero.omero_client.omero_config import (
     OMERO_HOST,
     OMERO_PORT,
     OMERO_GROUP,
@@ -37,7 +37,7 @@ def require_active_conn(func):
     return wrapper
 
 
-class OmeroServer:
+class OmeroClient:
     def __init__(self, host=None, group=None, port=None) -> None:
         self.conn = None
         if host is None:
@@ -108,7 +108,7 @@ class OmeroServer:
     @require_active_conn
     def get_shape(self, shape_id: int):
         return ezomero.get_shape(self.conn, shape_id)
-    
+
     @require_active_conn
     def get_table(self, table_id: int):
         return ezomero.get_table(self.conn, table_id)
@@ -137,7 +137,7 @@ class OmeroServer:
             if isinstance(ann, TagAnnotationWrapper)
         ]
         return image_tag_ids
-    
+
     @require_active_conn
     def get_image_table_ids(self, image_id: int):
         image = self.get_image(image_id)
@@ -166,7 +166,10 @@ class OmeroServer:
             OmeTiffWriter.save(image, temp_file.name, dim_order="ZYX")
 
             image_id_list = ezomero.ezimport(
-                self.conn, temp_file.name, project=project_id, dataset=dataset_id,
+                self.conn,
+                temp_file.name,
+                project=project_id,
+                dataset=dataset_id,
             )
 
             posted_img_id = image_id_list[0]
@@ -215,7 +218,9 @@ class OmeroServer:
         return shape_ids
 
     @require_active_conn
-    def attach_table_to_image(self, table: pd.DataFrame, image_id: int, table_title: str="Tracking results"):
+    def attach_table_to_image(
+        self, table: pd.DataFrame, image_id: int, table_title: str = "Tracking results"
+    ):
         table_id = ezomero.post_table(
             conn=self.conn,
             table=table,
@@ -224,7 +229,7 @@ class OmeroServer:
             title=table_title,
         )
         return table_id
-    
+
     @require_active_conn
     def post_dataset(self, project_id: int, dataset_name: str):
         dataset_id = ezomero.post_dataset(
@@ -233,14 +238,14 @@ class OmeroServer:
             project_id=project_id,
         )
         return dataset_id
-    
+
     @require_active_conn
     def post_tag_by_name(self, project_id: int, tag_name: str):
         project = self.get_project(project_id)
         tag_obj = TagAnnotationWrapper(self.conn)
-        
+
         tag_obj.createAndLink(
-            project, 
+            project,
             ns=None,
             val=tag_name,
         )
@@ -248,7 +253,7 @@ class OmeroServer:
         tag_id = self.get_tag_by_name(project_id, tag_name)
 
         return tag_id
-    
+
     @require_active_conn
     def get_tag_by_name(self, project_id: int, tag_name: str):
         project_tag_ids = ezomero.get_tag_ids(
@@ -263,7 +268,7 @@ class OmeroServer:
             selected_tag_name = tag.getTextValue()
             if selected_tag_name == tag_name:
                 return tag_id
-    
+
     @require_active_conn
     def post_roi(self, image_id: int, shapes: List):
         roi_id = ezomero.post_roi(
@@ -272,7 +277,7 @@ class OmeroServer:
             shapes=shapes,
         )
         return roi_id
-    
+
     @require_active_conn
     def post_binary_mask_as_roi(self, image_id: int, mask: np.ndarray):
         mask = rescale_intensity(mask, out_range=(0, 1)).astype(np.uint8)
@@ -283,7 +288,7 @@ class OmeroServer:
             for polygon in polygons:
                 points = polygon.get("geometry").get("coordinates")[0]
                 points_ezomero = []
-                for (x, y) in points:
+                for x, y in points:
                     points_ezomero.append((x, y))
                 roi = Polygon(
                     points=points_ezomero,
@@ -294,42 +299,52 @@ class OmeroServer:
         roi_id = self.post_roi(image_id, all_rois)
 
         return roi_id
-    
+
     @require_active_conn
     def download_binary_mask_from_image_rois(self, image_id):
+        all_roi_ids = self.get_image_rois(image_id)
         image = self.get_image(image_id)
 
+        # Workaround - For images that were not imported as OME-TIFF, the Z dimension is interpreted as T
+        size_z = image.getSizeZ()
+        if size_z == 1:
+            size_z = image.getSizeT()
+
         img_shape = (
-            image.getSizeZ(), 
-            image.getSizeY(), 
+            size_z,
+            image.getSizeY(),
             image.getSizeX(),
         )
 
-        all_roi_ids = self.get_image_rois(image_id)
+        features = []
+        for detection_id, roi_id in enumerate(all_roi_ids, start=1):
+            roi_shape_ids = self.get_roi_shapes(roi_id=roi_id)
+            for shape_id in roi_shape_ids:  # Different Z
+                geometry = self.get_shape(shape_id=shape_id)
+                z_idx = geometry.z
+                coords = geometry.points  # List of tuples (x, y)
+                coords = np.array(coords)
+                coords = np.vstack(
+                    [coords, coords[0]]
+                )  # Close the polygon for QuPath
+                geom = geojson.Polygon(coordinates=[coords.tolist()])
+                feature = geojson.Feature(
+                    geometry=geom,
+                    properties={
+                        "Detection ID": detection_id,
+                        "Class": 1,
+                        "z_idx": z_idx,
+                    },
+                )
+                features.append(feature)
 
-        if len(all_roi_ids) == 0:
-            mask = np.zeros(img_shape, dtype=np.uint16)
-        else:
-            features = []
-            for detection_id, roi_id in enumerate(all_roi_ids, start=1):
-                roi_shape_ids = self.get_roi_shapes(roi_id=roi_id)
-                for shape_id in roi_shape_ids:  # Different Z
-                    geometry = self.get_shape(shape_id=shape_id)
-                    z_idx = geometry.z
-                    coords = geometry.points  # List of tuples (x, y)
-                    coords = np.array(coords)
-                    coords = np.vstack([coords, coords[0]])  # Close the polygon for QuPath
-                    geom = geojson.Polygon(coordinates=[coords.tolist()])
-                    feature = geojson.Feature(
-                        geometry=geom, 
-                        properties={
-                            "Detection ID": detection_id, 
-                            "Class": 1,
-                            "z_idx": z_idx,
-                        }
-                    )
-                    features.append(feature)
-
-            mask = sk.features2instance_mask_3d(features, img_shape)
+        mask = sk.features2instance_mask_3d(features, img_shape)
 
         return mask
+    
+    @require_active_conn
+    def create_tag_if_not_exists(self, project_id: int, tag_name: str):
+        tag_id = self.get_tag_by_name(project_id, tag_name)
+        if tag_id is None:
+            tag_id = self.post_tag_by_name(project_id, tag_name)
+        return tag_id

@@ -15,8 +15,8 @@ from mousetumorpy import (
 )
 
 from imaging_server_kit.client import Client
-from depalma_napari_omero.omero_server._compute import MouseTumorComputeServer
-from depalma_napari_omero.omero_server import OmeroServer
+from depalma_napari_omero.omero_client._compute import MouseTumorComputeServer
+from depalma_napari_omero.omero_client import OmeroClient
 
 
 def find_specimen_tag(img_tags) -> str:
@@ -51,7 +51,10 @@ def find_raw_pred_tag(img_tags) -> list:
 def find_scan_time_tag(img_tags) -> int:
     """Finds a time stamp (e.g. 'T2') among image tags based on a regular expression."""
     r = re.compile("(Tm?|SCAN|scan)[0-9]+")
+    # r = re.compile("(Tm?|SCAN|scan)[0-9]+")  # TODO: Should we remove Tm1? = T?
     time_stamp_tag = list(sorted(filter(r.match, img_tags)))
+
+    # There must be exactly one matching scan time tag
     if len(time_stamp_tag) != 1:
         if len(time_stamp_tag) > 1:
             print("Incoherent scan times: ", time_stamp_tag)
@@ -59,7 +62,7 @@ def find_scan_time_tag(img_tags) -> int:
     time_stamp_tag = time_stamp_tag[0]
 
     t = re.findall(r"m?\d+", time_stamp_tag)[0]
-    if t == "m1":
+    if t == "m1":  # Prescans - to be ignored during tracking?
         t = -1
     else:
         t = int(t)
@@ -68,10 +71,12 @@ def find_scan_time_tag(img_tags) -> int:
 
 
 class OmeroProjectManager:
-    def __init__(self, server: OmeroServer, client, project_id: int, project_name: str):
+    def __init__(
+        self, omero_client: OmeroClient, client, project_id: int, project_name: str
+    ):
         self.all_categories = ["image", "roi", "raw_pred", "corrected_pred"]
 
-        self.server = server
+        self.omero_client = omero_client
         self.client = client
 
         self.id = project_id
@@ -86,12 +91,14 @@ class OmeroProjectManager:
         self.pred_missing = None
 
         # Creat the categorical tags if they do not exist
-        self.image_tag_id = self._create_tag_if_not_exists("image")
-        self.corrected_tag_id = self._create_tag_if_not_exists("corrected_pred")
+        self.image_tag_id = self.omero_client.create_tag_if_not_exists(self.id, "image")
+        self.corrected_tag_id = self.omero_client.create_tag_if_not_exists(
+            self.id, "corrected_pred"
+        )
 
     @property
     def n_datasets(self):
-        omero_project = self.server.get_project(self.id)
+        omero_project = self.omero_client.get_project(self.id)
         n_datasets = len(list(omero_project.listChildren()))
         return n_datasets
 
@@ -101,25 +108,19 @@ class OmeroProjectManager:
             return
         return list(self.df.get("specimen").unique())
 
-    def _create_tag_if_not_exists(self, tag_name: str):
-        tag_id = self.server.get_tag_by_name(self.id, tag_name)
-        if tag_id is None:
-            tag_id = self.server.post_tag_by_name(self.id, tag_name)
-        return tag_id
-
     def _project_data_generator(self):
-        omero_project = self.server.get_project(self.id)
+        omero_project = self.omero_client.get_project(self.id)
 
         for dataset in omero_project.listChildren():
             dataset_id = dataset.getId()
             dataset_name = dataset.getName()
-            dataset = self.server.get_dataset(dataset_id)
+            dataset = self.omero_client.get_dataset(dataset_id)
 
             for image in dataset.listChildren():
                 image_id = image.getId()
                 image_name = image.getName()
 
-                image_tags = self.server.get_image_tags(image_id)
+                image_tags = self.omero_client.get_image_tags(image_id)
 
                 specimen = find_specimen_tag(image_tags)
 
@@ -306,6 +307,9 @@ class OmeroProjectManager:
         self.roi_missing = roi_missing
         self.pred_missing = pred_missing
 
+        # TODO: self.lungs_missing?
+        # ...
+
     def print_summary(self):
         image_missing_anomalies = self.df_summary[self.df_summary["image"] == 0]
         n_removed_image_missing = len(image_missing_anomalies)
@@ -399,7 +403,7 @@ class OmeroProjectManager:
             return
 
         roi_ids_to_compute = self.roi_missing["image_id"].tolist()
-        
+
         if ask_confirm:
             print("\n" + "-" * 60)
             print("The following image IDs will be used for ROI computation:")
@@ -407,7 +411,11 @@ class OmeroProjectManager:
             print(f"\nThe resulting tumor masks will be uploaded to the OMERO project:")
             print(f"  → `{self.name}`")
 
-            confirm = input("\n✅ Press [Enter] to confirm, or type [n] to cancel: ").strip().lower()
+            confirm = (
+                input("\n✅ Press [Enter] to confirm, or type [n] to cancel: ")
+                .strip()
+                .lower()
+            )
             print()
 
             if confirm == "n":
@@ -462,7 +470,11 @@ class OmeroProjectManager:
             print(f"\nThe resulting tumor masks will be uploaded to the OMERO project:")
             print(f"  → `{self.name}`")
 
-            confirm = input("\n✅ Press [Enter] to confirm, or type [n] to cancel: ").strip().lower()
+            confirm = (
+                input("\n✅ Press [Enter] to confirm, or type [n] to cancel: ")
+                .strip()
+                .lower()
+            )
             print()
 
             if confirm == "n":
@@ -528,7 +540,7 @@ class OmeroProjectManager:
                 dst_image_id = roi_timeseries_ids[0]
 
                 # Skip if there is already a table attachment
-                table_ids = self.server.get_image_table_ids(image_id=dst_image_id)
+                table_ids = self.omero_client.get_image_table_ids(image_id=dst_image_id)
                 if len(table_ids) > 0:
                     # print(
                     #     "There is already a table attached to this image. Skipping..."
@@ -666,18 +678,20 @@ class OmeroProjectManager:
         return dataset_titles, dataset_data
 
     def handle_corrected_roi_uploaded(self, posted_image_id, image_id):
-        img_tags = self.server.get_image_tags(image_id)
+        img_tags = self.omero_client.get_image_tags(image_id)
         image_tags_list = find_image_tag(img_tags)
         image_tags_list.append("roi")
         image_tags_list.append("raw_pred")
 
-        self.server.copy_image_tags(
+        self.omero_client.copy_image_tags(
             src_image_id=image_id,
             dst_image_id=posted_image_id,
             exclude_tags=image_tags_list,
         )
 
-        self.server.tag_image_with_tag(posted_image_id, tag_id=self.corrected_tag_id)
+        self.omero_client.tag_image_with_tag(
+            posted_image_id, tag_id=self.corrected_tag_id
+        )
 
     def upload_new_scan(
         self, image_file: str, scan_time: str, specimen_name: str
@@ -710,7 +724,7 @@ class OmeroProjectManager:
             dataset_id = dataset_ids[0]  # It should be the first (and unique) item
         else:
             # Otherwise, create a new dataset named like the specimen
-            dataset_id = self.server.post_dataset(
+            dataset_id = self.omero_client.post_dataset(
                 project_id=self.id,
                 dataset_name=specimen_name,
             )
@@ -718,7 +732,7 @@ class OmeroProjectManager:
         dataset_id = int(dataset_id)  # Convert numpy int to python int
 
         # Post the image in the dataset
-        posted_image_id = self.server.import_image_to_ds(
+        posted_image_id = self.omero_client.import_image_to_ds(
             image=image,
             project_id=self.id,
             dataset_id=dataset_id,
@@ -726,14 +740,18 @@ class OmeroProjectManager:
         )
 
         # Tag the image appropriately
-        scan_time_tag_id = self._create_tag_if_not_exists(scan_time)
-        specimen_tag_id = self._create_tag_if_not_exists(specimen_name)
-        project_tag_id = self._create_tag_if_not_exists(self.name)
+        scan_time_tag_id = self.omero_client.create_tag_if_not_exists(
+            self.id, scan_time
+        )
+        specimen_tag_id = self.omero_client.create_tag_if_not_exists(
+            self.id, specimen_name
+        )
+        project_tag_id = self.omero_client.create_tag_if_not_exists(self.id, self.name)
 
-        self.server.tag_image_with_tag(posted_image_id, tag_id=self.image_tag_id)
-        self.server.tag_image_with_tag(posted_image_id, tag_id=scan_time_tag_id)
-        self.server.tag_image_with_tag(posted_image_id, tag_id=specimen_tag_id)
-        self.server.tag_image_with_tag(posted_image_id, tag_id=project_tag_id)
+        self.omero_client.tag_image_with_tag(posted_image_id, tag_id=self.image_tag_id)
+        self.omero_client.tag_image_with_tag(posted_image_id, tag_id=scan_time_tag_id)
+        self.omero_client.tag_image_with_tag(posted_image_id, tag_id=specimen_tag_id)
+        self.omero_client.tag_image_with_tag(posted_image_id, tag_id=project_tag_id)
 
         for _ in self.launch_scan():
             continue
@@ -754,17 +772,17 @@ class OmeroProjectManager:
         lungs_timeseries_list = []
         for roi_id in roi_timeseries_ids:
             print(f"Downloading roi (ID={roi_id})")
-            image = self.server.download_image(roi_id)
+            image = self.omero_client.download_image(roi_id)
             rois_timeseries_list.append(image)
 
             print("Downloading the lungs annotation")
-            lungs = self.server.download_binary_mask_from_image_rois(roi_id)
+            lungs = self.omero_client.download_binary_mask_from_image_rois(roi_id)
             lungs_timeseries_list.append(lungs)
 
         tumor_timeseries_list = []
         for tumor_id in tumor_timeseries_ids:
             print(f"Downloading tumor mask (ID={tumor_id})")
-            tumor = self.server.download_image(tumor_id)
+            tumor = self.omero_client.download_image(tumor_id)
             tumor_timeseries_list.append(tumor)
 
         rois_timeseries = combine_images(rois_timeseries_list)
@@ -787,11 +805,11 @@ class OmeroProjectManager:
         )
 
         dst_image_id = roi_timeseries_ids[0]
-        table_ids = self.server.get_image_table_ids(image_id=dst_image_id)
+        table_ids = self.omero_client.get_image_table_ids(image_id=dst_image_id)
 
         if len(table_ids) == 1:
             table_id = table_ids[0]  # Assuming there is only one table?
-            formatted_df = self.server.get_table(table_id)
+            formatted_df = self.omero_client.get_table(table_id)
             linkage_df = to_linkage_df(formatted_df)
 
             tumor_timeseries_tracked = generate_tracked_labels_timeseries(
@@ -820,8 +838,8 @@ class OmeroController:
         password: str = None,
         compute_server_url: str = None,
     ):
-        self.server = OmeroServer(host, group, port)
-        self.server.login(user, password)
+        self.omero_client = OmeroClient(host, group, port)
+        self.omero_client.login(user, password)
 
         if compute_server_url is None:
             self.client = MouseTumorComputeServer(host, group, port)
@@ -832,20 +850,20 @@ class OmeroController:
         self.project_manager = None
 
     def connect(self):
-        return self.server.connect()
+        return self.omero_client.connect()
 
     def quit(self):
-        self.server.quit()
+        self.omero_client.quit()
 
     @property
     def projects(self):
-        return self.server.projects
+        return self.omero_client.projects
 
     def set_project(
         self, project_id: int, project_name: str, launch_scan: bool = False
     ):
         self.project_manager = OmeroProjectManager(
-            server=self.server,
+            omero_client=self.omero_client,
             client=self.client,
             project_id=project_id,
             project_name=project_name,

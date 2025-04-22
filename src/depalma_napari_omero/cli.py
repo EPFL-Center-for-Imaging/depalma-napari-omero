@@ -2,11 +2,11 @@ import os
 import argparse
 import questionary
 
-from depalma_napari_omero.omero_server._project import (
+from depalma_napari_omero.omero_client._project import (
     OmeroController,
     OmeroProjectManager,
 )
-from depalma_napari_omero.omero_server.server_config import (
+from depalma_napari_omero.omero_client.omero_config import (
     OMERO_GROUP,
     OMERO_HOST,
     OMERO_PORT,
@@ -209,7 +209,7 @@ def interactive(controller: OmeroController):
 
 
 def run_all_workflows(controller: OmeroController, project_id: int, lungs_model: str, tumor_model: str):
-    """Run all workflows on a given OMERO project"""   
+    """Run all workflows on a given OMERO project"""
     found_project_name = None
     for project_name, omero_project_id in controller.projects.items():
         if project_id == omero_project_id:

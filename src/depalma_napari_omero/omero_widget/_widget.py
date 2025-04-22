@@ -28,7 +28,7 @@ from mousetumorpy import (  # Eventually this dependency should be removed from 
 
 from napari_toolkit.containers import setup_vcollapsiblegroupbox
 
-from depalma_napari_omero.omero_server._project import OmeroController
+from depalma_napari_omero.omero_client._project import OmeroController
 from depalma_napari_omero.omero_widget._worker import WorkerManager
 
 
@@ -74,13 +74,13 @@ class OMEROWidget(QWidget):
         # Omero server address
         omero_layout.addWidget(QLabel("URL", self), 0, 0)
         self.omero_server_ip = QLineEdit(self)
-        self.omero_server_ip.setText("127.0.0.1")
+        self.omero_server_ip.setText("omero-server.epfl.ch")
         omero_layout.addWidget(self.omero_server_ip, 0, 1)
 
         # Omero group
         omero_layout.addWidget(QLabel("Group", self), 1, 0)
         self.omero_group = QLineEdit(self)
-        self.omero_group.setText("system")
+        self.omero_group.setText("imaging-updepalma")
         omero_layout.addWidget(self.omero_group, 1, 1)
 
         # Omero port
@@ -92,31 +92,31 @@ class OMEROWidget(QWidget):
 
         login_layout.addWidget(omero_groupbox, 0, 0, 1, 2)
 
-        # Remote compute server
-        remote_compute_groupbox, remote_compute_container = setup_vcollapsiblegroupbox(
-            None, "Compute server", collapsed=True
-        )
+        # # Remote compute server (soon)
+        # remote_compute_groupbox, remote_compute_container = setup_vcollapsiblegroupbox(
+        #     None, "Compute server", collapsed=True
+        # )
 
-        grid_widget = QWidget()
-        compute_server_layout = QGridLayout(grid_widget)
-        remote_compute_container.addWidget(grid_widget)
+        # grid_widget = QWidget()
+        # compute_server_layout = QGridLayout(grid_widget)
+        # remote_compute_container.addWidget(grid_widget)
 
-        compute_server_layout.addWidget(QLabel("URL", self), 0, 0)
-        self.comptue_server_ip = QLineEdit(self)
-        self.comptue_server_ip.setText("127.0.0.1")
-        compute_server_layout.addWidget(self.comptue_server_ip, 0, 1)
+        # compute_server_layout.addWidget(QLabel("URL", self), 0, 0)
+        # self.comptue_server_ip = QLineEdit(self)
+        # self.comptue_server_ip.setText("127.0.0.1")
+        # compute_server_layout.addWidget(self.comptue_server_ip, 0, 1)
 
-        compute_server_layout.addWidget(QLabel("Use this server", self), 1, 0)
-        self.remote_compute_checkbox = QCheckBox()
-        self.remote_compute_checkbox.setChecked(False)
-        compute_server_layout.addWidget(self.remote_compute_checkbox, 1, 1)
+        # compute_server_layout.addWidget(QLabel("Use this server", self), 1, 0)
+        # self.remote_compute_checkbox = QCheckBox()
+        # self.remote_compute_checkbox.setChecked(False)
+        # compute_server_layout.addWidget(self.remote_compute_checkbox, 1, 1)
 
-        login_layout.addWidget(remote_compute_groupbox, 1, 0, 1, 2)
+        # login_layout.addWidget(remote_compute_groupbox, 1, 0, 1, 2)
 
         # Username
         login_layout.addWidget(QLabel("Username", self), 3, 0)
         self.username = QLineEdit(self)
-        self.username.setText("root")
+        self.username.setText("imaging-robot")
         login_layout.addWidget(self.username, 3, 1)
 
         # Password
@@ -169,7 +169,7 @@ class OMEROWidget(QWidget):
 
         # Run workflows
         self.btn_run_workflows = QPushButton("🔁 Run all workflows", self)
-        self.btn_run_workflows.clicked.connect(self._run_workflows)
+        self.btn_run_workflows.clicked.connect(self._run_all_workflows)
         experiment_layout.addWidget(self.btn_run_workflows, 3, 0, 1, 3)
 
         # Scan data group
@@ -349,10 +349,10 @@ class OMEROWidget(QWidget):
         user = self.username.text()
         password = self.password.text()
 
-        if self.remote_compute_checkbox.isChecked():
-            compute_server_url = self.comptue_server_ip.text()
-        else:
-            compute_server_url = None
+        # if self.remote_compute_checkbox.isChecked():
+        #     compute_server_url = self.comptue_server_ip.text()
+        # else:
+        #     compute_server_url = None
 
         self.controller = OmeroController(
             host,
@@ -360,7 +360,7 @@ class OMEROWidget(QWidget):
             port,
             user,
             password,
-            compute_server_url,
+            # compute_server_url,
         )
 
         connect_status = self.controller.connect()
@@ -406,7 +406,6 @@ class OMEROWidget(QWidget):
         self.cb_specimen.clear()
         self.cb_download_generic.clear()
         self.cb_scan_time.clear()
-        self.cb_specimen.clear()
         self.cb_dataset.clear()
 
         worker = self._update_project_worker()
@@ -437,17 +436,27 @@ class OMEROWidget(QWidget):
         n_nans_labels_timeseries = np.isnan(labels_timeseries_ids).any().sum()
         n_labels_timeseries = len(labels_timeseries_ids) - n_nans_labels_timeseries
 
+        # Lungs series
+        if self.check_lungs_available(roi_timeseries_ids):
+            n_lungs_timeseries = n_rois_timeseries
+        else:
+            n_lungs_timeseries = 0
+
+        # Tracked tumor IDs
+        dst_image_id = roi_timeseries_ids[0]
+        tracking_table_ids = self.controller.omero_client.get_image_table_ids(
+            image_id=dst_image_id
+        )
+
         # Update the UI
         self.cb_image.clear()
         self.cb_scan_time.clear()
         self.cb_scan_time.addItems(times)
         self.label_selected_case_value.setText(f"{specimen}")
         self.btn_download_roi_series.setText(f"⏬ {n_rois_timeseries} scans")
-        self.btn_download_lungs_series.setText(f"⏬ {n_rois_timeseries} scans")
+        self.btn_download_lungs_series.setText(f"⏬ {n_lungs_timeseries} scans")
         self.btn_download_untracked_tumors.setText(f"⏬ {n_labels_timeseries} scans")
-        dst_image_id = roi_timeseries_ids[0]
-        table_ids = self.controller.server.get_image_table_ids(image_id=dst_image_id)
-        if len(table_ids) == 1:
+        if len(tracking_table_ids) == 1:
             self.btn_download_tracked_tumors.setText(f"⏬ {n_labels_timeseries} scans")
 
     def _on_scan_time_change(self, selected_time):
@@ -466,7 +475,7 @@ class OMEROWidget(QWidget):
     @thread_worker
     def _download_worker(self, image_id, image_name, image_class):
         return (
-            self.controller.server.download_image(image_id),
+            self.controller.omero_client.download_image(image_id),
             image_name,
             image_class,
         )
@@ -521,7 +530,7 @@ class OMEROWidget(QWidget):
 
     @thread_worker
     def _upload_worker(self, posted_image_data, posted_image_name, dataset_id):
-        posted_image_id = self.controller.server.import_image_to_ds(
+        posted_image_id = self.controller.omero_client.import_image_to_ds(
             posted_image_data,
             self.project.id,
             dataset_id,
@@ -593,7 +602,7 @@ class OMEROWidget(QWidget):
         self.worker_manager.add_active(worker)
 
     @require_project
-    def _run_workflows(self, *args, **kwargs):
+    def _run_all_workflows(self, *args, **kwargs):
         if self.project.roi_missing is None:
             return
 
@@ -618,9 +627,7 @@ class OMEROWidget(QWidget):
             n_tracks_to_compute,
         )
 
-        worker.returned.connect(
-            self._reset_ui_and_update_project
-        )  # This might be a bit buggy?
+        worker.returned.connect(self._reset_ui_and_update_project)
 
         self.worker_manager.add_active(worker)
 
@@ -643,7 +650,7 @@ class OMEROWidget(QWidget):
                 continue
 
     @require_project
-    def _reset_ui_and_update_project(self):
+    def _reset_ui_and_update_project(self, *args, **kwargs):
         current_specimen_idx = self.cb_specimen.currentIndex()
         current_time_idx = self.cb_scan_time.currentIndex()
         current_dataset_idx = self.cb_dataset.currentIndex()
@@ -688,10 +695,18 @@ class OMEROWidget(QWidget):
         images = []
         for k, img_id in enumerate(to_download_ids):
             print(f"Downloading image ID = {img_id}")
-            images.append(self.controller.server.download_image(img_id))
+            images.append(self.controller.omero_client.download_image(img_id))
             yield k + 1
 
         return (combine_images(images), specimen_name)
+
+    def check_lungs_available(self, roi_timeseries_ids):
+        # There should be exactly one ROI attached for the lungs to be valid
+        for roi_id in roi_timeseries_ids:
+            all_roi_ids = self.controller.omero_client.get_image_rois(roi_id)
+            if len(all_roi_ids) != 1:
+                return False
+        return True
 
     @require_project
     def _download_ts_lungs(self, *args, **kwargs):
@@ -707,6 +722,10 @@ class OMEROWidget(QWidget):
             show_warning("No data to download.")
             return
 
+        if not self.check_lungs_available(roi_timeseries_ids):
+            show_warning(f"No lungs data to download.")
+            return
+
         worker = self._download_ts_lungs_worker(roi_timeseries_ids, specimen_name)
         worker.returned.connect(
             lambda payload: self.viewer.add_labels(
@@ -719,9 +738,11 @@ class OMEROWidget(QWidget):
     def _download_ts_lungs_worker(self, to_download_ids, specimen_name):
         images = []
         for k, img_id in enumerate(to_download_ids):
-            print(f"Downloading image ID = {img_id}")
+            print(f"Downloading ROI from image ID = {img_id}")
             images.append(
-                self.controller.server.download_binary_mask_from_image_rois(img_id)
+                self.controller.omero_client.download_binary_mask_from_image_rois(
+                    img_id
+                )
             )
             yield k + 1
 
@@ -743,12 +764,16 @@ class OMEROWidget(QWidget):
 
         dst_image_id = roi_timeseries_ids[0]
 
-        table_ids = self.controller.server.get_image_table_ids(image_id=dst_image_id)
+        table_ids = self.controller.omero_client.get_image_table_ids(
+            image_id=dst_image_id
+        )
         if len(table_ids) != 1:
             show_warning("No data to download.")
             return
 
-        table_ids = self.controller.server.get_image_table_ids(image_id=dst_image_id)
+        table_ids = self.controller.omero_client.get_image_table_ids(
+            image_id=dst_image_id
+        )
         table_id = table_ids[0]  # Assuming there is only one table?
 
         worker = self._download_tracked_tumors_worker(
@@ -768,12 +793,12 @@ class OMEROWidget(QWidget):
         tumor_timeseries = []
         for k, img_id in enumerate(labels_timeseries_ids):
             print(f"Downloading image ID = {img_id}")
-            tumor_timeseries.append(self.controller.server.download_image(img_id))
+            tumor_timeseries.append(self.controller.omero_client.download_image(img_id))
             yield k + 1
 
         tumor_timeseries = combine_images(tumor_timeseries)
 
-        formatted_df = self.controller.server.get_table(table_id)
+        formatted_df = self.controller.omero_client.get_table(table_id)
         linkage_df = to_linkage_df(formatted_df)
 
         tumor_timeseries_tracked = generate_tracked_labels_timeseries(

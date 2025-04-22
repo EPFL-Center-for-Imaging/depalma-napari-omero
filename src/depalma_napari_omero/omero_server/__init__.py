@@ -1,2 +1,0 @@
-from depalma_napari_omero.omero_server._server import OmeroServer
-from depalma_napari_omero.omero_server._project import OmeroController

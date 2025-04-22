@@ -13,8 +13,8 @@ from mousetumorpy import (
     to_formatted_df,
 )
 
-from depalma_napari_omero.omero_server import OmeroServer
-from depalma_napari_omero.omero_server.server_config import (
+from depalma_napari_omero.omero_client import OmeroClient
+from depalma_napari_omero.omero_client.omero_config import (
     OMERO_HOST,
     OMERO_PORT,
     OMERO_GROUP,
@@ -113,31 +113,25 @@ def find_image_tag(img_tags) -> list:
 class MouseTumorComputeServer(serverkit.AlgorithmServer):
     def __init__(
         self,
-        host: str, 
-        group: str, 
+        host: str,
+        group: str,
         port: int,
         algorithm_name: str = "mousetumorpy",
         parameters_model: Type[BaseModel] = Parameters,
     ):
         super().__init__(algorithm_name, parameters_model)
 
-        self.omero_server = OmeroServer(
+        self.omero_client = OmeroClient(
             host=host,
             group=group,
             port=port,
         )
 
     def login(self, user, password):
-        self.omero_server.login(
+        self.omero_client.login(
             user=user,
             password=password,
         )
-
-    def _create_tag_if_not_exists(self, project_id: int, tag_name: str):
-        tag_id = self.omero_server.get_tag_by_name(project_id, tag_name)
-        if tag_id is None:
-            tag_id = self.omero_server.post_tag_by_name(project_id, tag_name)
-        return tag_id
 
     def run_algorithm(
         self,
@@ -152,7 +146,7 @@ class MouseTumorComputeServer(serverkit.AlgorithmServer):
         tumor_timeseries_ids: List[int] = None,
         **kwargs,
     ) -> List[tuple]:
-        """Run the orientationpy algorithm."""
+        """Run the selected workflow step."""
         if workflow_step == "roi":
             status_code = self._compute_roi(
                 lungs_model, posted_image_name, image_id, dataset_id, project_id
@@ -173,7 +167,7 @@ class MouseTumorComputeServer(serverkit.AlgorithmServer):
     ) -> None:
         predictor = LungsPredictor(model)
 
-        image = self.omero_server.download_image(image_id)
+        image = self.omero_client.download_image(image_id)
 
         try:
             roi, lungs_roi = predictor.compute_3d_roi(image)
@@ -183,20 +177,20 @@ class MouseTumorComputeServer(serverkit.AlgorithmServer):
             )
             return -1
 
-        posted_image_id = self.omero_server.import_image_to_ds(
+        posted_image_id = self.omero_client.import_image_to_ds(
             roi, project_id, dataset_id, posted_image_name
         )
 
         # Upload the lungs as omero ROI
-        self.omero_server.post_binary_mask_as_roi(posted_image_id, lungs_roi)
+        self.omero_client.post_binary_mask_as_roi(posted_image_id, lungs_roi)
 
         # Add tags
-        roi_tag_id = self._create_tag_if_not_exists(project_id, "roi")
-        self.omero_server.tag_image_with_tag(posted_image_id, tag_id=roi_tag_id)
+        roi_tag_id = self.omero_client.create_tag_if_not_exists(project_id, "roi")
+        self.omero_client.tag_image_with_tag(posted_image_id, tag_id=roi_tag_id)
 
-        image_tags_list = find_image_tag(self.omero_server.get_image_tags(image_id))
+        image_tags_list = find_image_tag(self.omero_client.get_image_tags(image_id))
 
-        self.omero_server.copy_image_tags(
+        self.omero_client.copy_image_tags(
             src_image_id=image_id,
             dst_image_id=posted_image_id,
             exclude_tags=image_tags_list,
@@ -209,7 +203,7 @@ class MouseTumorComputeServer(serverkit.AlgorithmServer):
     ) -> None:
         predictor = TumorPredictor(model)
 
-        image = self.omero_server.download_image(image_id)
+        image = self.omero_client.download_image(image_id)
 
         try:
             image_pred = predictor.predict(image)
@@ -219,13 +213,13 @@ class MouseTumorComputeServer(serverkit.AlgorithmServer):
             )
             return -1
 
-        posted_image_id = self.omero_server.import_image_to_ds(
+        posted_image_id = self.omero_client.import_image_to_ds(
             image_pred, project_id, dataset_id, posted_image_name
         )
 
-        pred_tag_id = self._create_tag_if_not_exists(project_id, "raw_pred")
-        self.omero_server.tag_image_with_tag(posted_image_id, tag_id=pred_tag_id)
-        self.omero_server.copy_image_tags(
+        pred_tag_id = self.omero_client.create_tag_if_not_exists(project_id, "raw_pred")
+        self.omero_client.tag_image_with_tag(posted_image_id, tag_id=pred_tag_id)
+        self.omero_client.copy_image_tags(
             src_image_id=image_id,
             dst_image_id=posted_image_id,
             exclude_tags=["roi"],
@@ -239,14 +233,14 @@ class MouseTumorComputeServer(serverkit.AlgorithmServer):
         rois_timeseries_list = []
         lungs_timeseries_list = []
         for roi_id in roi_timeseries_ids:
-            image = self.omero_server.download_image(roi_id)
+            image = self.omero_client.download_image(roi_id)
             rois_timeseries_list.append(image)
-            lungs = self.omero_server.download_binary_mask_from_image_rois(roi_id)
+            lungs = self.omero_client.download_binary_mask_from_image_rois(roi_id)
             lungs_timeseries_list.append(lungs)
 
         tumor_timeseries_list = []
         for tumor_id in tumor_timeseries_ids:
-            tumor = self.omero_server.download_image(tumor_id)
+            tumor = self.omero_client.download_image(tumor_id)
             tumor_timeseries_list.append(tumor)
 
         rois_timeseries = combine_images(rois_timeseries_list)
@@ -267,7 +261,7 @@ class MouseTumorComputeServer(serverkit.AlgorithmServer):
 
         formatted_df = to_formatted_df(linkage_df)
 
-        self.omero_server.attach_table_to_image(
+        self.omero_client.attach_table_to_image(
             table=formatted_df,
             image_id=image_id,
         )
@@ -278,7 +272,7 @@ class MouseTumorComputeServer(serverkit.AlgorithmServer):
 if __name__ == "__main__":
     user = questionary.text("OMERO username:").ask()
     password = questionary.password("OMERO password:").ask()
-    
+
     server = MouseTumorComputeServer(
         host=OMERO_HOST,
         group=OMERO_GROUP,
