@@ -283,9 +283,9 @@ class OMEROWidget(QWidget):
         timeseries_layout.addWidget(self.btn_convert_to_tracks, 5, 2)
 
         # Convert to Binary
-        self.cb_convert_to_binary = QComboBox()
+        self.cb_update_colormap = QComboBox()
         timeseries_layout.addWidget(QLabel("Change direct color", self), 6, 0)
-        timeseries_layout.addWidget(self.cb_convert_to_binary, 6, 1)
+        timeseries_layout.addWidget(self.cb_update_colormap, 6, 1)
 
         colorpicker_layout = QVBoxLayout()
         colorpicker = QWidget(self)
@@ -293,7 +293,7 @@ class OMEROWidget(QWidget):
         self.colorpicker_widget = setup_colorpicker(
             layout=colorpicker_layout,
             initial_color=(0, 255, 0),
-            function=self._convert_to_binary,
+            function=self._update_direct_colormap,
         )
         timeseries_layout.addWidget(colorpicker, 6, 2)
 
@@ -361,7 +361,7 @@ class OMEROWidget(QWidget):
 
         self.cb_upload.clear()
         self.cb_convert_to_tracks.clear()
-        self.cb_convert_to_binary.clear()
+        self.cb_update_colormap.clear()
 
         for x in self.viewer.layers:
             if isinstance(x, Labels):
@@ -369,7 +369,7 @@ class OMEROWidget(QWidget):
                     self.cb_upload.addItem(x.name, x.data)
                 if len(x.data.shape) == 4:
                     self.cb_convert_to_tracks.addItem(x.name, x.data)
-                    self.cb_convert_to_binary.addItem(x.name, x.data)
+                    self.cb_update_colormap.addItem(x.name, x.data)
 
     def _login(self):
         host = self.omero_server_ip.text()
@@ -888,12 +888,12 @@ class OMEROWidget(QWidget):
             name="Tracks",
         )
 
-    def _convert_to_binary(self, *args, **kwargs):
-        labels_data = self.cb_convert_to_binary.currentData()
+    def _update_direct_colormap(self, *args, **kwargs):
+        labels_data = self.cb_update_colormap.currentData()
         if labels_data is None:
             return
 
-        labels_layer = self.viewer.layers[self.cb_convert_to_binary.currentText()]
+        labels_layer = self.viewer.layers[self.cb_update_colormap.currentText()]
         rgba = np.array(list(self.colorpicker_widget.get_color()) + [255]) / 255
         cmap = get_labels_cmap(labels_data, rgba)
         labels_layer.colormap = cmap
