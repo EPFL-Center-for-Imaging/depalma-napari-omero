@@ -2,6 +2,7 @@ import os
 import numpy as np
 from napari.layers import Image, Labels
 from napari.qt.threading import thread_worker
+from napari.utils import DirectLabelColormap
 from napari.utils.notifications import show_info, show_error, show_warning
 from PyQt5.QtCore import Qt
 from qtpy.QtWidgets import (
@@ -14,7 +15,7 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QSpinBox,
-    QCheckBox,
+    # QCheckBox,
 )
 
 from mousetumorpy import (  # Eventually this dependency should be removed from here
@@ -27,9 +28,26 @@ from mousetumorpy import (  # Eventually this dependency should be removed from 
 )
 
 from napari_toolkit.containers import setup_vcollapsiblegroupbox
+from napari_toolkit.widgets import setup_colorpicker
 
 from depalma_napari_omero.omero_client._project import OmeroController
 from depalma_napari_omero.omero_widget._worker import WorkerManager
+
+
+
+from napari.layers.labels._labels_constants import (
+    LabelColorMode,
+)
+
+
+def get_labels_cmap(labels_data: np.ndarray, rgba: np.ndarray = np.array([0, 1, 0, 1])):
+    color_dict = {}
+    for idx in np.unique(labels_data):
+        color_dict[idx] = rgba
+    color_dict[0] = np.array([0, 0, 0, 0])
+    color_dict[None] = np.array([0, 0, 0, 0])
+    cmap = DirectLabelColormap(color_dict=color_dict)
+    return cmap
 
 
 def require_project(func):
@@ -74,13 +92,15 @@ class OMEROWidget(QWidget):
         # Omero server address
         omero_layout.addWidget(QLabel("URL", self), 0, 0)
         self.omero_server_ip = QLineEdit(self)
-        self.omero_server_ip.setText("omero-server.epfl.ch")
+        # self.omero_server_ip.setText("omero-server.epfl.ch")
+        self.omero_server_ip.setText("localhost:4080")
         omero_layout.addWidget(self.omero_server_ip, 0, 1)
 
         # Omero group
         omero_layout.addWidget(QLabel("Group", self), 1, 0)
         self.omero_group = QLineEdit(self)
-        self.omero_group.setText("imaging-updepalma")
+        # self.omero_group.setText("imaging-updepalma")
+        self.omero_group.setText("system")
         omero_layout.addWidget(self.omero_group, 1, 1)
 
         # Omero port
@@ -116,13 +136,15 @@ class OMEROWidget(QWidget):
         # Username
         login_layout.addWidget(QLabel("Username", self), 3, 0)
         self.username = QLineEdit(self)
-        self.username.setText("imaging-robot")
+        # self.username.setText("imaging-robot")
+        self.username.setText("root")
         login_layout.addWidget(self.username, 3, 1)
 
         # Password
         login_layout.addWidget(QLabel("Password", self), 4, 0)
         self.password = QLineEdit(self)
         self.password.setEchoMode(QLineEdit.Password)
+        self.password.setText("omero")
         login_layout.addWidget(self.password, 4, 1)
 
         # Login
@@ -262,11 +284,18 @@ class OMEROWidget(QWidget):
 
         # Convert to Binary
         self.cb_convert_to_binary = QComboBox()
-        timeseries_layout.addWidget(QLabel("Convert to Binary", self), 6, 0)
+        timeseries_layout.addWidget(QLabel("Change direct color", self), 6, 0)
         timeseries_layout.addWidget(self.cb_convert_to_binary, 6, 1)
-        self.btn_convert_to_binary = QPushButton("Run", self)
-        self.btn_convert_to_binary.clicked.connect(self._convert_to_binary)
-        timeseries_layout.addWidget(self.btn_convert_to_binary, 6, 2)
+
+        colorpicker_layout = QVBoxLayout()
+        colorpicker = QWidget(self)
+        colorpicker.setLayout(colorpicker_layout)
+        self.colorpicker_widget = setup_colorpicker(
+            layout=colorpicker_layout,
+            initial_color=(0, 255, 0),
+            function=self._convert_to_binary,
+        )
+        timeseries_layout.addWidget(colorpicker, 6, 2)
 
         ### Generic upload tab
         generic_upload_layout = QGridLayout()
@@ -521,7 +550,10 @@ class OMEROWidget(QWidget):
         """Callback from download thread returning."""
         image_data, image_name, image_class = payload
         if image_class in ["corrected_pred", "raw_pred"]:
-            self.viewer.add_labels(image_data, name=image_name)
+            self.viewer.add_labels(
+                image_data, name=image_name,
+            )
+
         elif image_class in ["roi", "image"]:
             self.viewer.add_image(image_data, name=image_name)
         else:
@@ -729,7 +761,8 @@ class OMEROWidget(QWidget):
         worker = self._download_ts_lungs_worker(roi_timeseries_ids, specimen_name)
         worker.returned.connect(
             lambda payload: self.viewer.add_labels(
-                payload[0], name=f"{payload[1]}_lungs"
+                payload[0],
+                name=f"{payload[1]}_lungs",
             )
         )
         self.worker_manager.add_active(worker, max_iter=len(roi_timeseries_ids))
@@ -781,7 +814,8 @@ class OMEROWidget(QWidget):
         )
         worker.returned.connect(
             lambda payload: self.viewer.add_labels(
-                payload[0], name=f"{payload[1]}_tracked_tumors"
+                payload[0],
+                name=f"{payload[1]}_tracked_tumors",
             )
         )
         self.worker_manager.add_active(worker, max_iter=len(roi_timeseries_ids))
@@ -834,11 +868,15 @@ class OMEROWidget(QWidget):
         untracked_tumors_timeseries, specimen_name = payload
         untracked_tumors_timeseries = untracked_tumors_timeseries.astype(np.uint16)
         self.viewer.add_labels(
-            untracked_tumors_timeseries, name=f"{specimen_name}_tumors"
+            untracked_tumors_timeseries,
+            name=f"{specimen_name}_tumors",
         )
 
     def _convert_to_tracks(self, *args, **kwargs):
         labels_data = self.cb_convert_to_tracks.currentData()
+        if labels_data is None:
+            return
+
         df = initialize_df(labels_data, properties=["centroid", "label"])
         tracks_data = df[
             ["label", "frame_forward", "centroid-0", "centroid-1", "centroid-2"]
@@ -852,5 +890,10 @@ class OMEROWidget(QWidget):
 
     def _convert_to_binary(self, *args, **kwargs):
         labels_data = self.cb_convert_to_binary.currentData()
-        binary = labels_data > 0
-        self.viewer.add_labels(binary, name="Binary")
+        if labels_data is None:
+            return
+
+        labels_layer = self.viewer.layers[self.cb_convert_to_binary.currentText()]
+        rgba = np.array(list(self.colorpicker_widget.get_color()) + [255]) / 255
+        cmap = get_labels_cmap(labels_data, rgba)
+        labels_layer.colormap = cmap
