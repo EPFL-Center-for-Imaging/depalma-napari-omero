@@ -1,27 +1,23 @@
-from typing import List
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
+from typing import List
 
+import ezomero
+import geojson
+import imaging_server_kit as sk
 import numpy as np
 import pandas as pd
 import pooch
+from aicsimageio.writers import OmeTiffWriter
+from ezomero.rois import Polygon
+from omero.gateway import (BlitzGateway, FileAnnotationWrapper,
+                           TagAnnotationWrapper)
 from skimage.exposure import rescale_intensity
 
-from aicsimageio.writers import OmeTiffWriter
-from omero.gateway import BlitzGateway
-from omero.gateway import TagAnnotationWrapper, FileAnnotationWrapper
-import ezomero
-from ezomero.rois import Polygon
-
-import geojson
-import imaging_server_kit as sk
-
-from depalma_napari_omero.omero_client.omero_config import (
-    OMERO_HOST,
-    OMERO_PORT,
-    OMERO_GROUP,
-)
+from depalma_napari_omero.omero_client.omero_config import (OMERO_GROUP,
+                                                            OMERO_HOST,
+                                                            OMERO_PORT)
 
 
 def require_active_conn(func):
@@ -67,15 +63,18 @@ class OmeroClient:
 
     def connect(self) -> bool:
         self.quit()
-        self.conn = ezomero.connect(
-            user=self.user,
-            password=self.password,
-            group=self.group,
-            host=self.host,
-            port=self.port,
-            secure=True,
-            config_path=None,
-        )
+        try:
+            self.conn = ezomero.connect(
+                user=self.user,
+                password=self.password,
+                group=self.group,
+                host=self.host,
+                port=self.port,
+                secure=True,
+                config_path=None,
+            )
+        except Exception as e:
+            self.conn = None
 
         return self.conn is not None
 
@@ -162,20 +161,23 @@ class OmeroClient:
             delete=False,
             dir=cache_dir,
         ) as temp_file:
-            # The file name always has a random string attached.
-            OmeTiffWriter.save(image, temp_file.name, dim_order="ZYX")
+            # Remove the random strings attached to the file name
+            file_name = temp_file.name.split(".ome.tif")[0][:-9] + ".ome.tif"
+            OmeTiffWriter.save(image, file_name, dim_order="ZYX")
 
             image_id_list = ezomero.ezimport(
                 self.conn,
-                temp_file.name,
+                file_name,
                 project=project_id,
                 dataset=dataset_id,
             )
-
+            image_id_list = ezomero.ezimport(
+                self.conn, file_name, project=project_id, dataset=dataset_id
+            )
             posted_img_id = image_id_list[0]
 
             temp_file.close()
-            os.unlink(temp_file.name)
+            os.unlink(file_name)
 
         return posted_img_id
 
@@ -324,9 +326,7 @@ class OmeroClient:
                 z_idx = geometry.z
                 coords = geometry.points  # List of tuples (x, y)
                 coords = np.array(coords)
-                coords = np.vstack(
-                    [coords, coords[0]]
-                )  # Close the polygon for QuPath
+                coords = np.vstack([coords, coords[0]])  # Close the polygon for QuPath
                 geom = geojson.Polygon(coordinates=[coords.tolist()])
                 feature = geojson.Feature(
                     geometry=geom,
@@ -341,7 +341,7 @@ class OmeroClient:
         mask = sk.features2instance_mask_3d(features, img_shape)
 
         return mask
-    
+
     @require_active_conn
     def create_tag_if_not_exists(self, project_id: int, tag_name: str):
         tag_id = self.get_tag_by_name(project_id, tag_name)

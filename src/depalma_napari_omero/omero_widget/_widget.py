@@ -1,43 +1,22 @@
 import os
+
 import numpy as np
+from mousetumorpy import (  # Eventually this dependency should be removed from here
+    NNUNET_MODELS, YOLO_MODELS, combine_images,
+    generate_tracked_labels_timeseries, initialize_df, to_linkage_df)
 from napari.layers import Image, Labels
 from napari.qt.threading import thread_worker
 from napari.utils import DirectLabelColormap
-from napari.utils.notifications import show_info, show_error, show_warning
-from PyQt5.QtCore import Qt
-from qtpy.QtWidgets import (
-    QComboBox,
-    QGridLayout,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QTabWidget,
-    QVBoxLayout,
-    QWidget,
-    QSpinBox,
-    # QCheckBox,
-)
-
-from mousetumorpy import (  # Eventually this dependency should be removed from here
-    NNUNET_MODELS,
-    YOLO_MODELS,
-    combine_images,
-    generate_tracked_labels_timeseries,
-    to_linkage_df,
-    initialize_df,
-)
-
+from napari.utils.notifications import show_error, show_info, show_warning
 from napari_toolkit.containers import setup_vcollapsiblegroupbox
 from napari_toolkit.widgets import setup_colorpicker
+from PyQt5.QtCore import Qt
+from qtpy.QtWidgets import (QComboBox, QFileDialog, QGridLayout, QLabel,
+                            QLineEdit, QPushButton, QSpinBox, QTabWidget,
+                            QVBoxLayout, QWidget)
 
 from depalma_napari_omero.omero_client._project import OmeroController
 from depalma_napari_omero.omero_widget._worker import WorkerManager
-
-
-
-from napari.layers.labels._labels_constants import (
-    LabelColorMode,
-)
 
 
 def get_labels_cmap(labels_data: np.ndarray, rgba: np.ndarray = np.array([0, 1, 0, 1])):
@@ -93,7 +72,7 @@ class OMEROWidget(QWidget):
         omero_layout.addWidget(QLabel("URL", self), 0, 0)
         self.omero_server_ip = QLineEdit(self)
         # self.omero_server_ip.setText("omero-server.epfl.ch")
-        self.omero_server_ip.setText("localhost:4080")
+        self.omero_server_ip.setText("localhost")
         omero_layout.addWidget(self.omero_server_ip, 0, 1)
 
         # Omero group
@@ -193,6 +172,16 @@ class OMEROWidget(QWidget):
         self.btn_run_workflows = QPushButton("🔁 Run all workflows", self)
         self.btn_run_workflows.clicked.connect(self._run_all_workflows)
         experiment_layout.addWidget(self.btn_run_workflows, 3, 0, 1, 3)
+
+        # Upload new scans
+        self.btn_run_workflows = QPushButton("⬆️ Upload new scans", self)
+        self.btn_run_workflows.clicked.connect(self._upload_new_scans)
+        experiment_layout.addWidget(self.btn_run_workflows, 4, 0, 1, 3)
+
+        # Download experiment
+        self.btn_run_workflows = QPushButton("⬇️ Download project", self)
+        self.btn_run_workflows.clicked.connect(self._download_experiment)
+        experiment_layout.addWidget(self.btn_run_workflows, 5, 0, 1, 3)
 
         # Scan data group
         scan_data_group, scan_data_container = setup_vcollapsiblegroupbox(
@@ -367,6 +356,7 @@ class OMEROWidget(QWidget):
             if isinstance(x, Labels):
                 if len(x.data.shape) == 3:
                     self.cb_upload.addItem(x.name, x.data)
+                    self.cb_update_colormap.addItem(x.name, x.data)
                 if len(x.data.shape) == 4:
                     self.cb_convert_to_tracks.addItem(x.name, x.data)
                     self.cb_update_colormap.addItem(x.name, x.data)
@@ -551,7 +541,8 @@ class OMEROWidget(QWidget):
         image_data, image_name, image_class = payload
         if image_class in ["corrected_pred", "raw_pred"]:
             self.viewer.add_labels(
-                image_data, name=image_name,
+                image_data,
+                name=image_name,
             )
 
         elif image_class in ["roi", "image"]:
@@ -897,3 +888,34 @@ class OMEROWidget(QWidget):
         rgba = np.array(list(self.colorpicker_widget.get_color()) + [255]) / 255
         cmap = get_labels_cmap(labels_data, rgba)
         labels_layer.colormap = cmap
+        print("Updated colormap")
+
+    @thread_worker
+    def _upload_new_scans_worker(self, parent_dir):
+        for k in self.project.upload_from_parent_directory(parent_dir):
+            yield k + 1
+
+    @require_project
+    def _upload_new_scans(self, *args, **kwargs):
+        parent_dir = QFileDialog.getExistingDirectory(
+            self, caption="Mouse scans directory"
+        )
+        subfolders = [f.path for f in os.scandir(parent_dir) if f.is_dir()]
+        n_datasets_to_upload = len(subfolders)
+        worker = self._upload_new_scans_worker(parent_dir)
+        self.worker_manager.add_active(worker, max_iter=n_datasets_to_upload)
+
+    @thread_worker
+    def _download_experiment_worker(self, save_dir):
+        for k in self.project.download_all_cases(save_dir):
+            yield k + 1
+
+        # Also save all tracking results in a single CSV
+        self.project.save_merged_csv(save_dir)
+
+    @require_project
+    def _download_experiment(self, *args, **kwargs):
+        save_dir = QFileDialog.getExistingDirectory(self, caption="Save experiment")
+        print(f"{save_dir=}")
+        worker = self._download_experiment_worker(save_dir)
+        self.worker_manager.add_active(worker, max_iter=len(self.project.cases))

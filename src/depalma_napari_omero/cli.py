@@ -71,7 +71,7 @@ def project_menu(project: OmeroProjectManager):
         "🔙 Back": "back",
         "🔁 Run all workflows": "run_workflows",
         f"🐭 Select cases ({len(project.cases)})": "select_cases",
-        "⏫ Import a new raw scan": "create_new_dataset",
+        "⏫ Import new raw scans in batch": "upload_new_scans",
         f"": "",
     }
 
@@ -105,36 +105,16 @@ def project_menu(project: OmeroProjectManager):
     elif selected_option == "select_cases":
         select_case_menu(project)
 
-    elif selected_option == "create_new_dataset":
-        specimen_name = questionary.text(
-            "Specimen name?",
-            default="C00001",
-        ).ask()
-
-        scan_time = questionary.select(
-            "Scan time?",
-            choices=[
-                "prescan",
-                "scan01",
-                "scan02",
-                "scan03",
-                "scan04",
-                "scan05",
-            ],
-        ).ask()
-
-        image_file = questionary.path("Path to the image file").ask()
+    elif selected_option == "upload_new_scans":
+        image_dir = questionary.path("Path to the parent folder containing scan directories", only_directories=True).ask()
 
         confirm = input("\n✅ Press any key to confirm or [n] to cancel:").strip().lower()
 
         if confirm == "n":
             print("❌ Cancelled.")
         else:
-            project.upload_new_scan(
-                image_file=image_file,
-                scan_time=scan_time,
-                specimen_name=specimen_name,
-            )
+            for _ in project.upload_from_parent_directory(image_dir):
+                pass
 
             input("\n✅ Press [Enter] to return to the previous menu...")
 

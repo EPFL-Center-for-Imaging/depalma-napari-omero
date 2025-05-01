@@ -1,22 +1,22 @@
 import os
 import re
 from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 import skimage.io
-
-from mousetumorpy import (
-    combine_images,
-    to_linkage_df,
-    generate_tracked_labels_timeseries,
-    YOLO_MODELS,
-    NNUNET_MODELS,
-)
-
 from imaging_server_kit.client import Client
-from depalma_napari_omero.omero_client._compute import MouseTumorComputeServer
+from mousetumorpy import (
+    NNUNET_MODELS,
+    YOLO_MODELS,
+    combine_images,
+    generate_tracked_labels_timeseries,
+    to_linkage_df,
+)
+from tqdm import tqdm
+
 from depalma_napari_omero.omero_client import OmeroClient
+from depalma_napari_omero.omero_client._compute import MouseTumorComputeServer
 
 
 def find_specimen_tag(img_tags) -> str:
@@ -307,9 +307,6 @@ class OmeroProjectManager:
         self.roi_missing = roi_missing
         self.pred_missing = pred_missing
 
-        # TODO: self.lungs_missing?
-        # ...
-
     def print_summary(self):
         image_missing_anomalies = self.df_summary[self.df_summary["image"] == 0]
         n_removed_image_missing = len(image_missing_anomalies)
@@ -532,9 +529,6 @@ class OmeroProjectManager:
                 )
 
                 if len(roi_timeseries_ids) < 2:
-                    # print(
-                    #     "⚠️ Less than two scan times found. No tracking to be done. Skipping..."
-                    # )
                     continue
 
                 dst_image_id = roi_timeseries_ids[0]
@@ -542,9 +536,6 @@ class OmeroProjectManager:
                 # Skip if there is already a table attachment
                 table_ids = self.omero_client.get_image_table_ids(image_id=dst_image_id)
                 if len(table_ids) > 0:
-                    # print(
-                    #     "There is already a table attached to this image. Skipping..."
-                    # )
                     continue
 
                 self.client.run_algorithm(
@@ -693,11 +684,38 @@ class OmeroProjectManager:
             posted_image_id, tag_id=self.corrected_tag_id
         )
 
-    def upload_new_scan(
-        self, image_file: str, scan_time: str, specimen_name: str
-    ) -> int:
-        image = skimage.io.imread(image_file)
+    def upload_from_parent_directory(self, parent_dir: str):
+        """Upload selecting the parent directory containing image directories to upload"""
+        subfolders = [f.path for f in os.scandir(parent_dir) if f.is_dir()]
+        for k, image_dir in enumerate(subfolders):
+            self.upload_from_directory(image_dir)
+            yield k
 
+    def upload_from_directory(self, image_dir: str):
+        tiff_files = Path(image_dir).glob("*.tif")
+        # Remove the file with "rec_spr" in the name which is an overview of the mouse
+        tiff_image_files = sorted(
+            [
+                file
+                for file in tiff_files
+                if "rec_spr" not in Path(file).stem.split("~")[-1]
+            ]
+        )
+
+        # Assuming that all files follow the naming convention, simply check the pattern in the first file
+        exp_name, scan_time, specimen_name = (
+            Path(tiff_image_files[0]).stem.split("~")[0].split("_")
+        )
+
+        # Read files into a 3D tiff
+        image = np.array([skimage.io.imread(file) for file in tiff_image_files])
+
+        # Upload the 3D tiff
+        self.upload_new_scan(image, scan_time, specimen_name)
+
+    def upload_new_scan(
+        self, image: np.ndarray, scan_time: str, specimen_name: str
+    ) -> int:
         # Check the naming conventions
         if find_specimen_tag([specimen_name]) is None:
             print(
@@ -717,9 +735,10 @@ class OmeroProjectManager:
                 self.df[self.df["specimen"] == specimen_name].get("dataset_id").unique()
             )
             if len(dataset_ids) > 1:
-                raise ValueError(
+                print(
                     f"Multiple datasets found for this specimen name ({specimen_name})."
                 )
+                return
 
             dataset_id = dataset_ids[0]  # It should be the first (and unique) item
         else:
@@ -731,12 +750,14 @@ class OmeroProjectManager:
 
         dataset_id = int(dataset_id)  # Convert numpy int to python int
 
+        image_title = f"{specimen_name}_{scan_time}"
+
         # Post the image in the dataset
         posted_image_id = self.omero_client.import_image_to_ds(
             image=image,
             project_id=self.id,
             dataset_id=dataset_id,
-            image_title=Path(image_file).stem,
+            image_title=image_title,
         )
 
         # Tag the image appropriately
@@ -775,9 +796,9 @@ class OmeroProjectManager:
             image = self.omero_client.download_image(roi_id)
             rois_timeseries_list.append(image)
 
-            print("Downloading the lungs annotation")
-            lungs = self.omero_client.download_binary_mask_from_image_rois(roi_id)
-            lungs_timeseries_list.append(lungs)
+            # print("Downloading the lungs annotation")
+            # lungs = self.omero_client.download_binary_mask_from_image_rois(roi_id)
+            # lungs_timeseries_list.append(lungs)
 
         tumor_timeseries_list = []
         for tumor_id in tumor_timeseries_ids:
@@ -786,7 +807,7 @@ class OmeroProjectManager:
             tumor_timeseries_list.append(tumor)
 
         rois_timeseries = combine_images(rois_timeseries_list)
-        lungs_timeseries = combine_images(lungs_timeseries_list)
+        # lungs_timeseries = combine_images(lungs_timeseries_list)
         tumor_timeseries = combine_images(tumor_timeseries_list)
 
         skimage.io.imsave(
@@ -794,10 +815,10 @@ class OmeroProjectManager:
             rois_timeseries,
         )
 
-        skimage.io.imsave(
-            str(out_folder / "lungs_timeseries.tif"),
-            lungs_timeseries,
-        )
+        # skimage.io.imsave(
+        #     str(out_folder / "lungs_timeseries.tif"),
+        #     lungs_timeseries,
+        # )
 
         skimage.io.imsave(
             str(out_folder / "tumors_untracked.tif"),
@@ -826,6 +847,36 @@ class OmeroProjectManager:
             print(
                 f"{len(table_ids)} tables found attached to {dst_image_id=} (expected 1)."
             )
+
+    def download_all_cases(self, save_dir):
+        for k, case in enumerate(self.cases):
+            self.download_case(case, save_dir)
+            yield k
+
+    def save_merged_csv(self, save_dir):
+        all_dfs = []
+        csv_files_in_save_dir = list(Path(save_dir).rglob("*.csv"))
+        for csv_file in csv_files_in_save_dir:
+            specimen_name = csv_file.stem.split("_")[0]
+
+            if find_specimen_tag([specimen_name]) is None:
+                print(
+                    f"Specimen name {specimen_name} does not comply with naming convention (C*****)."
+                )
+                continue
+
+            df_specimen = pd.read_csv(csv_file)
+            df_specimen["Mouse_ID"] = specimen_name
+            all_dfs.append(df_specimen)
+
+        merged_df = pd.concat(all_dfs, ignore_index=True)
+        if "Unnamed: 0" in merged_df.columns:
+            merged_df = merged_df.drop(columns=["Unnamed: 0"])
+        columns = ["Mouse_ID"] + [col for col in merged_df.columns if col != "Mouse_ID"]
+        merged_df = merged_df[columns]
+        out_csv_path = Path(save_dir) / f"Project_{self.id}_tracking_results.csv"
+        merged_df.to_csv(out_csv_path)
+        print(f"Saved {out_csv_path}")
 
 
 class OmeroController:
