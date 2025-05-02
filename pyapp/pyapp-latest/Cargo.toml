@@ -1,6 +1,6 @@
 [package]
 name = "pyapp"
-version = "0.22.0"
+version = "0.27.0"
 description = "Runtime installer for Python applications"
 repository = "https://github.com/ofek/pyapp"
 documentation = "https://ofek.dev/pyapp/"
@@ -8,35 +8,36 @@ license = "Apache-2.0 OR MIT"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.86"
+anyhow = "1.0.95"
 base64 = "0.22.1"
-bzip2 = "0.4.4"
-clap = { version = "4.5.4", features = ["derive"] }
-directories = "5.0.1"
-flate2 = "1.0.30"
-fs4 = { version = "0.8.3", features = ["sync"] }
-indicatif = { version = "0.17.8", features = ["improved_unicode"] }
-once_cell = "1.19.0"
-os_pipe = "1.1.5"
-reqwest = { version = "0.12.4", features = ["blocking", "rustls-tls"], default-features = false }
-tar = "0.4.40"
-tempfile = "3.10.1"
-zip = "2.1.0"
-zstd = "0.13.1"
+bzip2 = "0.5.2"
+clap = { version = "4.5.31", features = ["derive"] }
+directories = "6.0.0"
+flate2 = "1.1.0"
+fs4 = { version = "0.13.0", features = ["sync"] }
+indicatif = { version = "0.17.11", features = ["improved_unicode"] }
+once_cell = "1.20.2"
+os_pipe = "1.2.1"
+reqwest = { version = "0.12.12", features = ["blocking", "rustls-tls"], default-features = false }
+tar = "0.4.43"
+tempfile = "3.16.0"
+zip = "2.2.3"
+zstd = "0.13.2"
 
 [build-dependencies]
 base64 = "0.22.1"
-flate2 = "1.0.30"
-highway = "1.0.0"
-rand = "0.8.5"
-regex = "1.8.1"
-reqwest = { version = "0.12.4", features = ["blocking", "rustls-tls"], default-features = false }
-tar = "0.4.40"
-zip = "2.1.0"
+flate2 = "1.1.0"
+highway = "1.3.0"
+rand = "0.9.0"
+regex = "1.11.1"
+reqwest = { version = "0.12.12", features = ["blocking", "rustls-tls"], default-features = false }
+tar = "0.4.43"
+zip = "2.2.3"
 
 [profile.release]
 panic = "abort"
 strip = true
+lto = true
 codegen-units = 1
 
 [package.metadata.cross.build.env]
@@ -51,6 +52,8 @@ passthrough = [
   "PYAPP_DISTRIBUTION_SITE_PACKAGES_PATH",
   "PYAPP_DISTRIBUTION_SOURCE",
   "PYAPP_DISTRIBUTION_VARIANT",
+  "PYAPP_DISTRIBUTION_VARIANT_CPU",
+  "PYAPP_DISTRIBUTION_VARIANT_GIL",
   "PYAPP_EXEC_CODE",
   "PYAPP_EXEC_MODULE",
   "PYAPP_EXEC_NOTEBOOK",
@@ -82,5 +85,6 @@ passthrough = [
   "PYAPP_UPGRADE_VIRTUALENV",
   "PYAPP_UV_ENABLED",
   "PYAPP_UV_ONLY_BOOTSTRAP",
+  "PYAPP_UV_SOURCE",
   "PYAPP_UV_VERSION",
 ]

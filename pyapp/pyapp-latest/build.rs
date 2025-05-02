@@ -7,224 +7,293 @@ use std::path::{Path, PathBuf};
 
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine as _};
 use highway::PortableHash;
-use rand::distributions::{Alphanumeric, DistString};
+use rand::distr::{Alphanumeric, SampleString};
 use regex::Regex;
 
-const DEFAULT_PYTHON_VERSION: &str = "3.12";
+const DEFAULT_PYTHON_VERSION: &str = "3.13";
 const KNOWN_DISTRIBUTION_FORMATS: &[&str] = &["tar|bzip2", "tar|gzip", "tar|zstd", "zip"];
 const DEFAULT_CPYTHON_SOURCE: &str =
-    "https://github.com/indygreg/python-build-standalone/releases/download/";
+    "https://github.com/astral-sh/python-build-standalone/releases/download/";
 const DEFAULT_PYPY_SOURCE: &str = "https://downloads.python.org/pypy/";
 
 // Python version in the form MAJOR.MINOR
 // Target OS https://doc.rust-lang.org/reference/conditional-compilation.html#target_os
 // Target arch https://doc.rust-lang.org/reference/conditional-compilation.html#target_arch
 // Target ABI https://doc.rust-lang.org/reference/conditional-compilation.html#target_env
-// Variant e.g. CPU optimization level for Linux
+// CPU optimization level
+// GIL mode e.g. freethreaded
 // URL for fetching the distribution
 //
 // See also https://llvm.org/doxygen/classllvm_1_1Triple.html
 #[rustfmt::skip]
-const DEFAULT_CPYTHON_DISTRIBUTIONS: &[(&str, &str, &str, &str, &str, &str)] = &[
-    ("3.12", "linux", "aarch64", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-aarch64-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.12", "linux", "armv7", "gnueabi", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-armv7-unknown-linux-gnueabi-install_only.tar.gz"),
-    ("3.12", "linux", "armv7", "gnueabihf", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-armv7-unknown-linux-gnueabihf-install_only.tar.gz"),
-    ("3.12", "linux", "powerpc64", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-ppc64le-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.12", "linux", "s390x", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-s390x-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.12", "linux", "x86_64", "gnu", "v1",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-x86_64-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.12", "linux", "x86_64", "gnu", "v2",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-x86_64_v2-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.12", "linux", "x86_64", "gnu", "v3",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-x86_64_v3-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.12", "linux", "x86_64", "gnu", "v4",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-x86_64_v4-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.12", "linux", "x86_64", "musl", "v1",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-x86_64-unknown-linux-musl-install_only.tar.gz"),
-    ("3.12", "linux", "x86_64", "musl", "v2",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-x86_64_v2-unknown-linux-musl-install_only.tar.gz"),
-    ("3.12", "linux", "x86_64", "musl", "v3",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-x86_64_v3-unknown-linux-musl-install_only.tar.gz"),
-    ("3.12", "linux", "x86_64", "musl", "v4",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-x86_64_v4-unknown-linux-musl-install_only.tar.gz"),
-    ("3.12", "windows", "x86", "msvc", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-i686-pc-windows-msvc-install_only.tar.gz"),
-    ("3.12", "windows", "x86_64", "msvc", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-x86_64-pc-windows-msvc-install_only.tar.gz"),
-    ("3.12", "macos", "aarch64", "", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-aarch64-apple-darwin-install_only.tar.gz"),
-    ("3.12", "macos", "x86_64", "", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.12.3%2B20240415-x86_64-apple-darwin-install_only.tar.gz"),
-    ("3.11", "linux", "aarch64", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-aarch64-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.11", "linux", "armv7", "gnueabi", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-armv7-unknown-linux-gnueabi-install_only.tar.gz"),
-    ("3.11", "linux", "armv7", "gnueabihf", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-armv7-unknown-linux-gnueabihf-install_only.tar.gz"),
-    ("3.11", "linux", "powerpc64", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-ppc64le-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.11", "linux", "s390x", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-s390x-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.11", "linux", "x86", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20230826/cpython-3.11.5%2B20230826-i686-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.11", "linux", "x86_64", "gnu", "v1",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-x86_64-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.11", "linux", "x86_64", "gnu", "v2",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-x86_64_v2-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.11", "linux", "x86_64", "gnu", "v3",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-x86_64_v3-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.11", "linux", "x86_64", "gnu", "v4",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-x86_64_v4-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.11", "linux", "x86_64", "musl", "v1",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-x86_64-unknown-linux-musl-install_only.tar.gz"),
-    ("3.11", "linux", "x86_64", "musl", "v2",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-x86_64_v2-unknown-linux-musl-install_only.tar.gz"),
-    ("3.11", "linux", "x86_64", "musl", "v3",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-x86_64_v3-unknown-linux-musl-install_only.tar.gz"),
-    ("3.11", "linux", "x86_64", "musl", "v4",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-x86_64_v4-unknown-linux-musl-install_only.tar.gz"),
-    ("3.11", "windows", "x86", "msvc", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-i686-pc-windows-msvc-install_only.tar.gz"),
-    ("3.11", "windows", "x86_64", "msvc", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-x86_64-pc-windows-msvc-install_only.tar.gz"),
-    ("3.11", "macos", "aarch64", "", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-aarch64-apple-darwin-install_only.tar.gz"),
-    ("3.11", "macos", "x86_64", "", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.11.9%2B20240415-x86_64-apple-darwin-install_only.tar.gz"),
-    ("3.10", "linux", "aarch64", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-aarch64-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.10", "linux", "armv7", "gnueabi", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-armv7-unknown-linux-gnueabi-install_only.tar.gz"),
-    ("3.10", "linux", "armv7", "gnueabihf", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-armv7-unknown-linux-gnueabihf-install_only.tar.gz"),
-    ("3.10", "linux", "powerpc64", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-ppc64le-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.10", "linux", "s390x", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-s390x-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.10", "linux", "x86", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20230826/cpython-3.10.13%2B20230826-i686-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.10", "linux", "x86_64", "gnu", "v1",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-x86_64-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.10", "linux", "x86_64", "gnu", "v2",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-x86_64_v2-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.10", "linux", "x86_64", "gnu", "v3",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-x86_64_v3-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.10", "linux", "x86_64", "gnu", "v4",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-x86_64_v4-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.10", "linux", "x86_64", "musl", "v1",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-x86_64-unknown-linux-musl-install_only.tar.gz"),
-    ("3.10", "linux", "x86_64", "musl", "v2",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-x86_64_v2-unknown-linux-musl-install_only.tar.gz"),
-    ("3.10", "linux", "x86_64", "musl", "v3",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-x86_64_v3-unknown-linux-musl-install_only.tar.gz"),
-    ("3.10", "linux", "x86_64", "musl", "v4",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-x86_64_v4-unknown-linux-musl-install_only.tar.gz"),
-    ("3.10", "windows", "x86", "msvc", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-i686-pc-windows-msvc-install_only.tar.gz"),
-    ("3.10", "windows", "x86_64", "msvc", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-x86_64-pc-windows-msvc-install_only.tar.gz"),
-    ("3.10", "macos", "aarch64", "", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-aarch64-apple-darwin-install_only.tar.gz"),
-    ("3.10", "macos", "x86_64", "", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.10.14%2B20240415-x86_64-apple-darwin-install_only.tar.gz"),
-    ("3.9", "linux", "aarch64", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-aarch64-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.9", "linux", "armv7", "gnueabi", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-armv7-unknown-linux-gnueabi-install_only.tar.gz"),
-    ("3.9", "linux", "armv7", "gnueabihf", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-armv7-unknown-linux-gnueabihf-install_only.tar.gz"),
-    ("3.9", "linux", "powerpc64", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-ppc64le-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.9", "linux", "s390x", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-s390x-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.9", "linux", "x86", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20230826/cpython-3.9.18%2B20230826-i686-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.9", "linux", "x86_64", "gnu", "v1",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-x86_64-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.9", "linux", "x86_64", "gnu", "v2",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-x86_64_v2-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.9", "linux", "x86_64", "gnu", "v3",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-x86_64_v3-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.9", "linux", "x86_64", "gnu", "v4",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-x86_64_v4-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.9", "linux", "x86_64", "musl", "v1",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-x86_64-unknown-linux-musl-install_only.tar.gz"),
-    ("3.9", "linux", "x86_64", "musl", "v2",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-x86_64_v2-unknown-linux-musl-install_only.tar.gz"),
-    ("3.9", "linux", "x86_64", "musl", "v3",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-x86_64_v3-unknown-linux-musl-install_only.tar.gz"),
-    ("3.9", "linux", "x86_64", "musl", "v4",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-x86_64_v4-unknown-linux-musl-install_only.tar.gz"),
-    ("3.9", "windows", "x86", "msvc", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-i686-pc-windows-msvc-install_only.tar.gz"),
-    ("3.9", "windows", "x86_64", "msvc", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-x86_64-pc-windows-msvc-install_only.tar.gz"),
-    ("3.9", "macos", "aarch64", "", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-aarch64-apple-darwin-install_only.tar.gz"),
-    ("3.9", "macos", "x86_64", "", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.9.19%2B20240415-x86_64-apple-darwin-install_only.tar.gz"),
-    ("3.8", "linux", "aarch64", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.8.19%2B20240415-aarch64-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.8", "linux", "x86", "gnu", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20230826/cpython-3.8.17%2B20230826-i686-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.8", "linux", "x86_64", "gnu", "v1",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.8.19%2B20240415-x86_64-unknown-linux-gnu-install_only.tar.gz"),
-    ("3.8", "linux", "x86_64", "musl", "v1",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.8.19%2B20240415-x86_64-unknown-linux-musl-install_only.tar.gz"),
-    ("3.8", "windows", "x86", "msvc", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.8.19%2B20240415-i686-pc-windows-msvc-install_only.tar.gz"),
-    ("3.8", "windows", "x86_64", "msvc", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.8.19%2B20240415-x86_64-pc-windows-msvc-install_only.tar.gz"),
-    ("3.8", "macos", "aarch64", "", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.8.19%2B20240415-aarch64-apple-darwin-install_only.tar.gz"),
-    ("3.8", "macos", "x86_64", "", "",
-        "https://github.com/indygreg/python-build-standalone/releases/download/20240415/cpython-3.8.19%2B20240415-x86_64-apple-darwin-install_only.tar.gz"),
+const DEFAULT_CPYTHON_DISTRIBUTIONS: &[(&str, &str, &str, &str, &str, &str, &str)] = &[
+    ("3.13", "linux", "aarch64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "aarch64", "gnu", "", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-aarch64-unknown-linux-gnu-freethreaded%2Bnoopt-full.tar.zst"),
+    ("3.13", "linux", "armv7", "gnueabi", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-armv7-unknown-linux-gnueabi-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "armv7", "gnueabi", "", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-armv7-unknown-linux-gnueabi-freethreaded%2Bnoopt-full.tar.zst"),
+    ("3.13", "linux", "armv7", "gnueabihf", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-armv7-unknown-linux-gnueabihf-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "armv7", "gnueabihf", "", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-armv7-unknown-linux-gnueabihf-freethreaded%2Bnoopt-full.tar.zst"),
+    ("3.13", "linux", "powerpc64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-ppc64le-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "powerpc64", "gnu", "", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-ppc64le-unknown-linux-gnu-freethreaded%2Bnoopt-full.tar.zst"),
+    ("3.13", "linux", "riscv64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-riscv64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "riscv64", "gnu", "", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-riscv64-unknown-linux-gnu-freethreaded%2Bnoopt-full.tar.zst"),
+    ("3.13", "linux", "s390x", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-s390x-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "s390x", "gnu", "", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-s390x-unknown-linux-gnu-freethreaded%2Bnoopt-full.tar.zst"),
+    ("3.13", "linux", "x86_64", "gnu", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "x86_64", "gnu", "v1", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64-unknown-linux-gnu-freethreaded%2Bpgo%2Blto-full.tar.zst"),
+    ("3.13", "linux", "x86_64", "gnu", "v2", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64_v2-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "x86_64", "gnu", "v2", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64_v2-unknown-linux-gnu-freethreaded%2Bpgo%2Blto-full.tar.zst"),
+    ("3.13", "linux", "x86_64", "gnu", "v3", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64_v3-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "x86_64", "gnu", "v3", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64_v3-unknown-linux-gnu-freethreaded%2Bpgo%2Blto-full.tar.zst"),
+    ("3.13", "linux", "x86_64", "gnu", "v4", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64_v4-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "x86_64", "gnu", "v4", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64_v4-unknown-linux-gnu-freethreaded%2Bpgo%2Blto-full.tar.zst"),
+    ("3.13", "linux", "x86_64", "musl", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "x86_64", "musl", "v2", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64_v2-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "x86_64", "musl", "v3", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64_v3-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.13", "linux", "x86_64", "musl", "v4", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64_v4-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.13", "windows", "x86", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-i686-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.13", "windows", "x86", "msvc", "", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-i686-pc-windows-msvc-freethreaded%2Bpgo-full.tar.zst"),
+    ("3.13", "windows", "x86_64", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.13", "windows", "x86_64", "msvc", "", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64-pc-windows-msvc-freethreaded%2Bpgo-full.tar.zst"),
+    ("3.13", "macos", "aarch64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-aarch64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.13", "macos", "aarch64", "", "", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-aarch64-apple-darwin-freethreaded%2Bpgo%2Blto-full.tar.zst"),
+    ("3.13", "macos", "x86_64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.13", "macos", "x86_64", "", "", "freethreaded",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.13.2%2B20250311-x86_64-apple-darwin-freethreaded%2Bpgo%2Blto-full.tar.zst"),
+    ("3.12", "linux", "aarch64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "armv7", "gnueabi", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-armv7-unknown-linux-gnueabi-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "armv7", "gnueabihf", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-armv7-unknown-linux-gnueabihf-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "powerpc64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-ppc64le-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "riscv64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-riscv64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "s390x", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-s390x-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "x86_64", "gnu", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "x86_64", "gnu", "v2", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-x86_64_v2-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "x86_64", "gnu", "v3", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-x86_64_v3-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "x86_64", "gnu", "v4", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-x86_64_v4-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "x86_64", "musl", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-x86_64-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "x86_64", "musl", "v2", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-x86_64_v2-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "x86_64", "musl", "v3", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-x86_64_v3-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.12", "linux", "x86_64", "musl", "v4", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-x86_64_v4-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.12", "windows", "x86", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-i686-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.12", "windows", "x86_64", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.12", "macos", "aarch64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-aarch64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.12", "macos", "x86_64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.12.9%2B20250311-x86_64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "aarch64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "armv7", "gnueabi", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-armv7-unknown-linux-gnueabi-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "armv7", "gnueabihf", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-armv7-unknown-linux-gnueabihf-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "powerpc64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-ppc64le-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "riscv64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-riscv64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "s390x", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-s390x-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "x86_64", "gnu", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "x86_64", "gnu", "v2", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-x86_64_v2-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "x86_64", "gnu", "v3", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-x86_64_v3-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "x86_64", "gnu", "v4", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-x86_64_v4-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "x86_64", "musl", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-x86_64-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "x86_64", "musl", "v2", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-x86_64_v2-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "x86_64", "musl", "v3", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-x86_64_v3-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.11", "linux", "x86_64", "musl", "v4", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-x86_64_v4-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.11", "windows", "x86", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-i686-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.11", "windows", "x86_64", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.11", "macos", "aarch64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-aarch64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.11", "macos", "x86_64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.11.11%2B20250311-x86_64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "aarch64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "armv7", "gnueabi", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-armv7-unknown-linux-gnueabi-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "armv7", "gnueabihf", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-armv7-unknown-linux-gnueabihf-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "powerpc64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-ppc64le-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "riscv64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-riscv64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "s390x", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-s390x-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "x86_64", "gnu", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "x86_64", "gnu", "v2", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-x86_64_v2-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "x86_64", "gnu", "v3", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-x86_64_v3-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "x86_64", "gnu", "v4", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-x86_64_v4-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "x86_64", "musl", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-x86_64-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "x86_64", "musl", "v2", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-x86_64_v2-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "x86_64", "musl", "v3", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-x86_64_v3-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.10", "linux", "x86_64", "musl", "v4", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-x86_64_v4-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.10", "windows", "x86", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-i686-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.10", "windows", "x86_64", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.10", "macos", "aarch64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-aarch64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.10", "macos", "x86_64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.10.16%2B20250311-x86_64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "aarch64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "armv7", "gnueabi", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-armv7-unknown-linux-gnueabi-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "armv7", "gnueabihf", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-armv7-unknown-linux-gnueabihf-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "powerpc64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-ppc64le-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "riscv64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-riscv64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "s390x", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-s390x-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "x86_64", "gnu", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "x86_64", "gnu", "v2", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-x86_64_v2-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "x86_64", "gnu", "v3", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-x86_64_v3-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "x86_64", "gnu", "v4", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-x86_64_v4-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "x86_64", "musl", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-x86_64-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "x86_64", "musl", "v2", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-x86_64_v2-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "x86_64", "musl", "v3", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-x86_64_v3-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.9", "linux", "x86_64", "musl", "v4", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-x86_64_v4-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.9", "windows", "x86", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-i686-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.9", "windows", "x86_64", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.9", "macos", "aarch64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-aarch64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.9", "macos", "x86_64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20250311/cpython-3.9.21%2B20250311-x86_64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.8", "linux", "aarch64", "gnu", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20241002/cpython-3.8.20%2B20241002-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.8", "linux", "x86_64", "gnu", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20241002/cpython-3.8.20%2B20241002-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"),
+    ("3.8", "linux", "x86_64", "musl", "v1", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20241002/cpython-3.8.20%2B20241002-x86_64-unknown-linux-musl-install_only_stripped.tar.gz"),
+    ("3.8", "windows", "x86", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20241002/cpython-3.8.20%2B20241002-i686-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.8", "windows", "x86_64", "msvc", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20241002/cpython-3.8.20%2B20241002-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"),
+    ("3.8", "macos", "aarch64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20241002/cpython-3.8.20%2B20241002-aarch64-apple-darwin-install_only_stripped.tar.gz"),
+    ("3.8", "macos", "x86_64", "", "", "",
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20241002/cpython-3.8.20%2B20241002-x86_64-apple-darwin-install_only_stripped.tar.gz"),
     // Frozen
-    ("3.7", "linux", "x86_64", "gnu", "", "https://github.com/indygreg/python-build-standalone/releases/download/20200822/cpython-3.7.9-x86_64-unknown-linux-gnu-pgo-20200823T0036.tar.zst"),
-    ("3.7", "linux", "x86_64", "musl", "", "https://github.com/indygreg/python-build-standalone/releases/download/20200822/cpython-3.7.9-x86_64-unknown-linux-musl-noopt-20200823T0036.tar.zst"),
-    ("3.7", "windows", "x86", "msvc", "", "https://github.com/indygreg/python-build-standalone/releases/download/20200822/cpython-3.7.9-i686-pc-windows-msvc-shared-pgo-20200823T0159.tar.zst"),
-    ("3.7", "windows", "x86_64", "msvc", "", "https://github.com/indygreg/python-build-standalone/releases/download/20200822/cpython-3.7.9-x86_64-pc-windows-msvc-shared-pgo-20200823T0118.tar.zst"),
-    ("3.7", "macos", "x86_64", "", "", "https://github.com/indygreg/python-build-standalone/releases/download/20200823/cpython-3.7.9-x86_64-apple-darwin-pgo-20200823T2228.tar.zst"),
+    ("3.11", "linux", "x86", "gnu", "", "", "https://github.com/astral-sh/python-build-standalone/releases/download/20230826/cpython-3.11.5%2B20230826-i686-unknown-linux-gnu-install_only.tar.gz"),
+    ("3.10", "linux", "x86", "gnu", "", "", "https://github.com/astral-sh/python-build-standalone/releases/download/20230826/cpython-3.10.13%2B20230826-i686-unknown-linux-gnu-install_only.tar.gz"),
+    ("3.9", "linux", "x86", "gnu", "", "", "https://github.com/astral-sh/python-build-standalone/releases/download/20230826/cpython-3.9.18%2B20230826-i686-unknown-linux-gnu-install_only.tar.gz"),
+    ("3.8", "linux", "x86", "gnu", "", "", "https://github.com/astral-sh/python-build-standalone/releases/download/20230826/cpython-3.8.17%2B20230826-i686-unknown-linux-gnu-install_only.tar.gz"),
+    ("3.7", "linux", "x86_64", "gnu", "", "", "https://github.com/astral-sh/python-build-standalone/releases/download/20200822/cpython-3.7.9-x86_64-unknown-linux-gnu-pgo-20200823T0036.tar.zst"),
+    ("3.7", "linux", "x86_64", "musl", "", "", "https://github.com/astral-sh/python-build-standalone/releases/download/20200822/cpython-3.7.9-x86_64-unknown-linux-musl-noopt-20200823T0036.tar.zst"),
+    ("3.7", "windows", "x86", "msvc", "", "", "https://github.com/astral-sh/python-build-standalone/releases/download/20200822/cpython-3.7.9-i686-pc-windows-msvc-shared-pgo-20200823T0159.tar.zst"),
+    ("3.7", "windows", "x86_64", "msvc", "", "", "https://github.com/astral-sh/python-build-standalone/releases/download/20200822/cpython-3.7.9-x86_64-pc-windows-msvc-shared-pgo-20200823T0118.tar.zst"),
+    ("3.7", "macos", "x86_64", "", "", "", "https://github.com/astral-sh/python-build-standalone/releases/download/20200823/cpython-3.7.9-x86_64-apple-darwin-pgo-20200823T2228.tar.zst"),
 ];
 
 // See https://downloads.python.org/pypy/
 #[rustfmt::skip]
 const DEFAULT_PYPY_DISTRIBUTIONS: &[(&str, &str, &str, &str, &str)] = &[
     ("pypy3.10", "linux", "aarch64", "gnu",
-        "https://downloads.python.org/pypy/pypy3.10-v7.3.15-aarch64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy3.10-v7.3.17-aarch64.tar.bz2"),
     ("pypy3.10", "linux", "x86_64", "gnu",
-        "https://downloads.python.org/pypy/pypy3.10-v7.3.15-linux64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy3.10-v7.3.17-linux64.tar.bz2"),
     ("pypy3.10", "windows", "x86_64", "msvc",
-        "https://downloads.python.org/pypy/pypy3.10-v7.3.15-win64.zip"),
+        "https://downloads.python.org/pypy/pypy3.10-v7.3.17-win64.zip"),
     ("pypy3.10", "macos", "aarch64", "",
-        "https://downloads.python.org/pypy/pypy3.10-v7.3.15-macos_arm64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy3.10-v7.3.17-macos_arm64.tar.bz2"),
     ("pypy3.10", "macos", "x86_64", "",
-        "https://downloads.python.org/pypy/pypy3.10-v7.3.15-macos_x86_64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy3.10-v7.3.17-macos_x86_64.tar.bz2"),
     ("pypy3.9", "linux", "aarch64", "gnu",
-        "https://downloads.python.org/pypy/pypy3.9-v7.3.15-aarch64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy3.9-v7.3.16-aarch64.tar.bz2"),
     ("pypy3.9", "linux", "x86_64", "gnu",
-        "https://downloads.python.org/pypy/pypy3.9-v7.3.15-linux64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy3.9-v7.3.16-linux64.tar.bz2"),
     ("pypy3.9", "windows", "x86_64", "msvc",
-        "https://downloads.python.org/pypy/pypy3.9-v7.3.15-win64.zip"),
+        "https://downloads.python.org/pypy/pypy3.9-v7.3.16-win64.zip"),
     ("pypy3.9", "macos", "aarch64", "",
-        "https://downloads.python.org/pypy/pypy3.9-v7.3.15-macos_arm64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy3.9-v7.3.16-macos_arm64.tar.bz2"),
     ("pypy3.9", "macos", "x86_64", "",
-        "https://downloads.python.org/pypy/pypy3.9-v7.3.15-macos_x86_64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy3.9-v7.3.16-macos_x86_64.tar.bz2"),
     ("pypy2.7", "linux", "aarch64", "gnu",
-        "https://downloads.python.org/pypy/pypy2.7-v7.3.15-aarch64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy2.7-v7.3.17-aarch64.tar.bz2"),
     ("pypy2.7", "linux", "x86_64", "gnu",
-        "https://downloads.python.org/pypy/pypy2.7-v7.3.15-linux64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy2.7-v7.3.17-linux64.tar.bz2"),
     ("pypy2.7", "windows", "x86_64", "msvc",
-        "https://downloads.python.org/pypy/pypy2.7-v7.3.15-win64.zip"),
+        "https://downloads.python.org/pypy/pypy2.7-v7.3.17-win64.zip"),
     ("pypy2.7", "macos", "aarch64", "",
-        "https://downloads.python.org/pypy/pypy2.7-v7.3.15-macos_arm64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy2.7-v7.3.17-macos_arm64.tar.bz2"),
     ("pypy2.7", "macos", "x86_64", "",
-        "https://downloads.python.org/pypy/pypy2.7-v7.3.15-macos_x86_64.tar.bz2"),
+        "https://downloads.python.org/pypy/pypy2.7-v7.3.17-macos_x86_64.tar.bz2"),
 ];
 
 fn set_runtime_variable(name: &str, value: impl Display) {
@@ -237,6 +306,19 @@ fn check_environment_variable(name: &str) -> String {
         panic!("\n\n{name} environment variable is not set\n\n");
     }
     value
+}
+
+fn filename_from_url(url: &str) -> String {
+    let parsed =
+        reqwest::Url::parse(url).unwrap_or_else(|_| panic!("unable to parse URL: {}", &url));
+
+    if let Some(segments) = parsed.path_segments() {
+        if let Some(segment) = segments.last() {
+            return segment.into();
+        }
+    }
+
+    panic!("unable to determine artifact name from URL: {}", &url);
 }
 
 fn is_enabled(name: &str) -> bool {
@@ -267,7 +349,7 @@ fn normalize_project_name(name: &String) -> String {
         .to_lowercase()
 }
 
-fn normalize_relative_path(path: &String) -> String {
+fn normalize_relative_path(path: &str) -> String {
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
         path.replace('/', "\\")
             .strip_prefix('\\')
@@ -326,17 +408,6 @@ fn get_distribution_source() -> String {
     }
     .to_string();
     let selected_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-    let selected_variant = {
-        let mut variant = env::var("PYAPP_DISTRIBUTION_VARIANT").unwrap_or_default();
-        if variant.is_empty()
-            && selected_platform == "linux"
-            && selected_arch == "x86_64"
-            && selected_python_version != "3.7"
-        {
-            variant = "v3".to_string();
-        };
-        variant
-    };
     let selected_abi = {
         let mut abi = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
         if abi.is_empty() {
@@ -351,13 +422,35 @@ fn get_distribution_source() -> String {
         };
         abi
     };
+    let selected_variant_cpu = {
+        let legacy_variant = env::var("PYAPP_DISTRIBUTION_VARIANT").unwrap_or_default();
+        let mut variant = env::var("PYAPP_DISTRIBUTION_VARIANT_CPU").unwrap_or_default();
+        if !legacy_variant.is_empty() {
+            if !variant.is_empty() {
+                panic!("\n\nBoth PYAPP_DISTRIBUTION_VARIANT and PYAPP_DISTRIBUTION_VARIANT_CPU are set\n\n");
+            }
+            return legacy_variant;
+        };
+        if variant.is_empty()
+            && selected_platform == "linux"
+            && selected_arch == "x86_64"
+            && selected_python_version != "3.7"
+        {
+            variant = "v3".to_string();
+        };
+        variant
+    };
+    let selected_variant_gil = env::var("PYAPP_DISTRIBUTION_VARIANT_GIL").unwrap_or_default();
 
-    for (python_version, platform, arch, abi, variant, url) in DEFAULT_CPYTHON_DISTRIBUTIONS {
+    for (python_version, platform, arch, abi, variant_cpu, variant_gil, url) in
+        DEFAULT_CPYTHON_DISTRIBUTIONS
+    {
         if python_version == &selected_python_version
             && platform == &selected_platform
             && arch == &selected_arch
             && abi == &selected_abi
-            && variant == &selected_variant
+            && variant_cpu == &selected_variant_cpu
+            && variant_gil == &selected_variant_gil
         {
             return url.to_string();
         }
@@ -374,8 +467,8 @@ fn get_distribution_source() -> String {
     }
 
     panic!(
-        "\n\nNo default distribution source found\nPython version: {}\nPlatform: {}\nArchitecture: {}\nABI: {}\nVariant: {}\n\n",
-        selected_python_version, selected_platform, selected_arch, selected_abi, selected_variant
+        "\n\nNo default distribution source found\nPython version: {}\nPlatform: {}\nArchitecture: {}\nABI: {}\nVariant CPU: {}\nVariant GIL: {}\n\n",
+        selected_python_version, selected_platform, selected_arch, selected_abi, selected_variant_cpu, selected_variant_gil
     );
 }
 
@@ -922,27 +1015,51 @@ fn set_uv_only_bootstrap() {
     }
 }
 
-fn set_uv_version() {
-    let variable = "PYAPP_UV_VERSION";
-    let version = env::var(variable).unwrap_or("any".to_string());
-    set_runtime_variable(variable, version);
+fn set_uv_source() {
+    let source_variable = "PYAPP_UV_SOURCE";
+    let mut source = env::var(source_variable).unwrap_or_default();
 
-    let artifact_name = if !is_enabled("PYAPP_UV_ENABLED") {
-        "".to_string()
-    } else if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
-        // Force MinGW-w64 to use msvc
-        if env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default() == "gnu" {
+    if !source.is_empty() {
+        set_runtime_variable("PYAPP__UV_ARTIFACT_NAME", filename_from_url(&source));
+
+        let mut hasher = PortableHash::default();
+        source.hash(&mut hasher);
+        set_runtime_variable("PYAPP__UV_VERSION", hasher.finish());
+    } else {
+        let version_variable = "PYAPP_UV_VERSION";
+        let version = env::var(version_variable).unwrap_or("any".to_string());
+
+        let artifact_name = if !is_enabled("PYAPP_UV_ENABLED") {
+            "".to_string()
+        } else if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows" {
+            // Force MinGW-w64 to use msvc
+            if env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default() == "gnu" {
+                format!(
+                    "uv-{}-pc-windows-msvc.zip",
+                    env::var("CARGO_CFG_TARGET_ARCH").unwrap()
+                )
+            } else {
+                format!("uv-{}.zip", env::var("TARGET").unwrap())
+            }
+        } else {
+            format!("uv-{}.tar.gz", env::var("TARGET").unwrap())
+        };
+
+        source = if version == "any" {
             format!(
-                "uv-{}-pc-windows-msvc.zip",
-                env::var("CARGO_CFG_TARGET_ARCH").unwrap()
+                "https://github.com/astral-sh/uv/releases/latest/download/{}",
+                &artifact_name,
             )
         } else {
-            format!("uv-{}.zip", env::var("TARGET").unwrap())
-        }
-    } else {
-        format!("uv-{}.tar.gz", env::var("TARGET").unwrap())
-    };
-    set_runtime_variable("PYAPP__UV_ARTIFACT_NAME", artifact_name);
+            format!(
+                "https://github.com/astral-sh/uv/releases/download/{}/{}",
+                &version, &artifact_name,
+            )
+        };
+        set_runtime_variable("PYAPP__UV_ARTIFACT_NAME", artifact_name);
+        set_runtime_variable("PYAPP__UV_VERSION", &version);
+    }
+    set_runtime_variable(source_variable, &source);
 }
 
 fn set_skip_install() {
@@ -982,10 +1099,7 @@ fn set_self_command() {
     let variable = "PYAPP_SELF_COMMAND";
     let command_name = env::var(variable).unwrap_or_default();
     if command_name == "none" {
-        set_runtime_variable(
-            variable,
-            Alphanumeric.sample_string(&mut rand::thread_rng(), 16),
-        );
+        set_runtime_variable(variable, Alphanumeric.sample_string(&mut rand::rng(), 16));
         set_runtime_variable("PYAPP__EXPOSED_COMMAND", "");
     } else if !command_name.is_empty() {
         set_runtime_variable(variable, &command_name);
@@ -1070,7 +1184,7 @@ fn main() {
     set_pip_allow_config();
     set_uv_enabled();
     set_uv_only_bootstrap();
-    set_uv_version();
+    set_uv_source();
     set_allow_updates();
     set_indicator();
     set_self_command();

@@ -8,6 +8,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 
+## 0.27.0 - 2025-03-12
+
+***Added:***
+
+- Update default CPython distributions to 20250311
+- Update dependencies
+
+***Fixed:***
+
+- Fix compiler warnings on newer versions of Rust for use of the `FileExt` trait provided by the `fs4` crate
+
+## 0.26.0 - 2025-01-04
+
+***Added:***
+
+- Update default CPython distributions to 20241219
+- Update dependencies
+
+## 0.25.0 - 2024-12-15
+
+***Added:***
+
+- Update default CPython distributions to 20241206
+- Enable LTO for releases
+- Update dependencies
+
+## 0.24.0 - 2024-10-13
+
+***Changed:***
+
+- The `PYAPP_DISTRIBUTION_VARIANT` has been renamed to `PYAPP_DISTRIBUTION_VARIANT_CPU` although the former is still supported for backwards compatibility
+
+***Added:***
+
+- Support Python 3.13 and set as the default version
+- Add `PYAPP_DISTRIBUTION_VARIANT_GIL` option (Python 3.13+)
+- Update default CPython distributions to 20241008
+- Update default PyPy distributions to 7.3.17
+- Update dependencies
+
+## 0.23.0 - 2024-08-03
+
+***Added:***
+
+- Add `PYAPP_UV_SOURCE` option
+
 ## 0.22.0 - 2024-05-26
 
 ***Added:***
