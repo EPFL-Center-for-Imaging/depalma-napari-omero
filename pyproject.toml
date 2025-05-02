@@ -30,7 +30,7 @@ dependencies = [
     "aicsimageio",
     "imaging_server_kit>=0.0.6",
     "napari-toolkit",
-    # "mousetumorpy",
+    "mousetumorpy",
 ]
 
 [project.scripts]

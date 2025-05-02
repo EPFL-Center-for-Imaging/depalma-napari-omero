@@ -3,7 +3,7 @@ import os
 import numpy as np
 from mousetumorpy import (  # Eventually this dependency should be removed from here
     NNUNET_MODELS, YOLO_MODELS, combine_images,
-    generate_tracked_labels_timeseries, initialize_df, to_linkage_df)
+    generate_tracked_tumors, initialize_df, to_linkage_df)
 from napari.layers import Image, Labels
 from napari.qt.threading import thread_worker
 from napari.utils import DirectLabelColormap
@@ -826,7 +826,7 @@ class OMEROWidget(QWidget):
         formatted_df = self.controller.omero_client.get_table(table_id)
         linkage_df = to_linkage_df(formatted_df)
 
-        tumor_timeseries_tracked = generate_tracked_labels_timeseries(
+        tumor_timeseries_tracked = generate_tracked_tumors(
             tumor_timeseries, linkage_df
         )
 

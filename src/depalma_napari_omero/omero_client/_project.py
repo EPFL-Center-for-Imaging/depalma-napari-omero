@@ -10,7 +10,7 @@ from mousetumorpy import (
     NNUNET_MODELS,
     YOLO_MODELS,
     combine_images,
-    generate_tracked_labels_timeseries,
+    generate_tracked_tumors,
     to_linkage_df,
 )
 from tqdm import tqdm
@@ -833,7 +833,7 @@ class OmeroProjectManager:
             formatted_df = self.omero_client.get_table(table_id)
             linkage_df = to_linkage_df(formatted_df)
 
-            tumor_timeseries_tracked = generate_tracked_labels_timeseries(
+            tumor_timeseries_tracked = generate_tracked_tumors(
                 tumor_timeseries, linkage_df
             )
 
