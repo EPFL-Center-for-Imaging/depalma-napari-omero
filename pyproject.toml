@@ -3,7 +3,7 @@ name = "depalma-napari-omero"
 dynamic = ["version"]
 description = "Napari interface for the De Palma lab."
 readme = "README.md"
-requires-python = ">=3.9,<3.10"
+requires-python = ">=3.9,<3.11"
 license = {file = "LICENSE"}
 authors = [{ name = "Mallory Wittwer", email = "mallory.wittwer@epfl.ch" }]
 
@@ -12,25 +12,26 @@ classifiers = [
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
 
 dependencies = [
-    "napari[all]>=0.4.16",
-    # "ezomero==1.1.1",
-    "ezomero",  # TODO: Check that this works!
+    "ezomero",
     "numpy",
     "pandas",
     "tifffile",
     "pooch",
-    "napari-label-focus>=0.1.4",
-    "napari-remove-objects",
-    "napari-adaptive-painting", 
     "questionary",
     "aicsimageio",
-    "imaging_server_kit>=0.0.6",
+    "napari[all]",
     "napari-toolkit",
+    "napari-label-focus>=0.1.4",
+    "napari-remove-objects",
+    "napari-adaptive-painting",
+    "imaging-server-kit>=0.0.8",
     "mousetumorpy",
+    # "napari-mousetumorpy",
 ]
 
 [project.scripts]

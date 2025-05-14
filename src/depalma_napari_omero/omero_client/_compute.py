@@ -3,7 +3,8 @@ import re
 import questionary
 import uvicorn
 from pydantic import BaseModel, Field
-import imaging_server_kit as serverkit
+
+from imaging_server_kit import AlgorithmServer
 
 from mousetumorpy import (
     LungsPredictor,
@@ -110,7 +111,7 @@ def find_image_tag(img_tags) -> list:
     return image_tag
 
 
-class MouseTumorComputeServer(serverkit.AlgorithmServer):
+class MouseTumorComputeServer(AlgorithmServer):
     def __init__(
         self,
         host: str,

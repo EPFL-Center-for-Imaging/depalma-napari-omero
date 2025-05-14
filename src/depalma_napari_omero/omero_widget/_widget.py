@@ -462,10 +462,13 @@ class OMEROWidget(QWidget):
             n_lungs_timeseries = 0
 
         # Tracked tumor IDs
-        dst_image_id = roi_timeseries_ids[0]
-        tracking_table_ids = self.controller.omero_client.get_image_table_ids(
-            image_id=dst_image_id
-        )
+        if len(roi_timeseries_ids):
+            dst_image_id = roi_timeseries_ids[0]
+            tracking_table_ids = self.controller.omero_client.get_image_table_ids(
+                image_id=dst_image_id
+            )
+        else:
+            tracking_table_ids = []
 
         # Update the UI
         self.cb_image.clear()

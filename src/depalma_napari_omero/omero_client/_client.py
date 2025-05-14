@@ -5,7 +5,6 @@ from typing import List
 
 import ezomero
 import geojson
-import imaging_server_kit as sk
 import numpy as np
 import pandas as pd
 import pooch
@@ -14,6 +13,8 @@ from ezomero.rois import Polygon
 from omero.gateway import (BlitzGateway, FileAnnotationWrapper,
                            TagAnnotationWrapper)
 from skimage.exposure import rescale_intensity
+
+from imaging_server_kit.core import mask2features, features2instance_mask_3d
 
 from depalma_napari_omero.omero_client.omero_config import (OMERO_GROUP,
                                                             OMERO_HOST,
@@ -171,9 +172,6 @@ class OmeroClient:
                 project=project_id,
                 dataset=dataset_id,
             )
-            image_id_list = ezomero.ezimport(
-                self.conn, file_name, project=project_id, dataset=dataset_id
-            )
             posted_img_id = image_id_list[0]
 
             temp_file.close()
@@ -286,7 +284,7 @@ class OmeroClient:
 
         all_rois = []
         for z_idx, lung_slice in enumerate(mask):
-            polygons = sk.mask2features(lung_slice)
+            polygons = mask2features(lung_slice)
             for polygon in polygons:
                 points = polygon.get("geometry").get("coordinates")[0]
                 points_ezomero = []
@@ -338,7 +336,7 @@ class OmeroClient:
                 )
                 features.append(feature)
 
-        mask = sk.features2instance_mask_3d(features, img_shape)
+        mask = features2instance_mask_3d(features, img_shape)
 
         return mask
 
