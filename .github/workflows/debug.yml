@@ -56,7 +56,7 @@ jobs:
         shell: bash
         env:
           PYAPP_PROJECT_VERSION: ${{ env.VERSION }}
-          PYAPP_PYTHON_VERSION: '3.9'
+          PYAPP_PYTHON_VERSION: '3.10'
           PYAPP_PROJECT_DEPENDENCY_FILE: ${{ env.REQUIREMENTS_PATH_LINUX }}
         run: cargo build --release --manifest-path pyapp/pyapp-latest/Cargo.toml
       

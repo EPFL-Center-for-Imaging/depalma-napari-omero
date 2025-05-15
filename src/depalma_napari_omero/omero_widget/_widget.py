@@ -115,15 +115,15 @@ class OMEROWidget(QWidget):
         # Username
         login_layout.addWidget(QLabel("Username", self), 3, 0)
         self.username = QLineEdit(self)
-        # self.username.setText("imaging-robot")
-        self.username.setText("root")
+        self.username.setText("imaging-robot")
+        # self.username.setText("root")
         login_layout.addWidget(self.username, 3, 1)
 
         # Password
         login_layout.addWidget(QLabel("Password", self), 4, 0)
         self.password = QLineEdit(self)
         self.password.setEchoMode(QLineEdit.Password)
-        self.password.setText("omero")
+        # self.password.setText("omero")
         login_layout.addWidget(self.password, 4, 1)
 
         # Login

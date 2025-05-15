@@ -13,7 +13,7 @@ script_directory = Path(__file__).parent
 # Set environment variables
 os.environ['PYAPP_PROJECT_NAME'] = __name__
 os.environ['PYAPP_PROJECT_VERSION'] = __version__
-os.environ['PYAPP_PYTHON_VERSION'] = "3.9"
+os.environ['PYAPP_PYTHON_VERSION'] = "3.10"
 os.environ['PYAPP_EXEC_SCRIPT'] = str((script_directory.parent / 'src' / __name__ / '__main__.py').resolve())
 if os.name == 'nt':
     print("Building for Windows.")
