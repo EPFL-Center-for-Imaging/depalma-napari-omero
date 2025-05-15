@@ -71,15 +71,15 @@ class OMEROWidget(QWidget):
         # Omero server address
         omero_layout.addWidget(QLabel("URL", self), 0, 0)
         self.omero_server_ip = QLineEdit(self)
-        # self.omero_server_ip.setText("omero-server.epfl.ch")
-        self.omero_server_ip.setText("localhost")
+        self.omero_server_ip.setText("omero-server.epfl.ch")
+        # self.omero_server_ip.setText("localhost")
         omero_layout.addWidget(self.omero_server_ip, 0, 1)
 
         # Omero group
         omero_layout.addWidget(QLabel("Group", self), 1, 0)
         self.omero_group = QLineEdit(self)
-        # self.omero_group.setText("imaging-updepalma")
-        self.omero_group.setText("system")
+        self.omero_group.setText("imaging-updepalma")
+        # self.omero_group.setText("system")
         omero_layout.addWidget(self.omero_group, 1, 1)
 
         # Omero port
