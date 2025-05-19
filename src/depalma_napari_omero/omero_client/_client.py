@@ -162,20 +162,18 @@ class OmeroClient:
             delete=False,
             dir=cache_dir,
         ) as temp_file:
-            # Remove the random strings attached to the file name
-            file_name = temp_file.name.split(".ome.tif")[0][:-9] + ".ome.tif"
+            file_name = Path(temp_file.name).with_name(f"{Path(image_title).stem}.ome.tif")
             OmeTiffWriter.save(image, file_name, dim_order="ZYX")
 
-            image_id_list = ezomero.ezimport(
-                self.conn,
-                file_name,
-                project=project_id,
-                dataset=dataset_id,
-            )
-            posted_img_id = image_id_list[0]
+        image_id_list = ezomero.ezimport(
+            self.conn,
+            file_name,
+            project=project_id,
+            dataset=dataset_id,
+        )
+        posted_img_id = image_id_list[0]
 
-            temp_file.close()
-            os.unlink(file_name)
+        os.unlink(file_name)
 
         return posted_img_id
 

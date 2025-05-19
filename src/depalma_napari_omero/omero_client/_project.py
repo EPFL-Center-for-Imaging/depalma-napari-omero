@@ -831,18 +831,19 @@ class OmeroProjectManager:
         if len(table_ids) == 1:
             table_id = table_ids[0]  # Assuming there is only one table?
             formatted_df = self.omero_client.get_table(table_id)
-            linkage_df = to_linkage_df(formatted_df)
+            if formatted_df is not None:
+                linkage_df = to_linkage_df(formatted_df)
 
-            tumor_timeseries_tracked = generate_tracked_tumors(
-                tumor_timeseries, linkage_df
-            )
+                tumor_timeseries_tracked = generate_tracked_tumors(
+                    tumor_timeseries, linkage_df
+                )
 
-            skimage.io.imsave(
-                str(out_folder / "tumors_tracked.tif"),
-                tumor_timeseries_tracked,
-            )
+                skimage.io.imsave(
+                    str(out_folder / "tumors_tracked.tif"),
+                    tumor_timeseries_tracked,
+                )
 
-            formatted_df.to_csv(str(out_folder / f"{selected_case}_results.csv"))
+                formatted_df.to_csv(str(out_folder / f"{selected_case}_results.csv"))
         else:
             print(
                 f"{len(table_ids)} tables found attached to {dst_image_id=} (expected 1)."

@@ -30,7 +30,7 @@ dependencies = [
     "napari-adaptive-painting",
     "imaging-server-kit>=0.0.8",
     "mousetumorpy>=0.0.2",
-    # "napari-mousetumorpy",
+    "napari-mousetumorpy",
 ]
 
 [project.scripts]
