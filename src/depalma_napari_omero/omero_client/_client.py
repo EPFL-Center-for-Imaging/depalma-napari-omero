@@ -165,6 +165,8 @@ class OmeroClient:
             file_name = Path(temp_file.name).with_name(f"{Path(image_title).stem}.ome.tif")
             OmeTiffWriter.save(image, file_name, dim_order="ZYX")
 
+        temp_file.close()
+        
         image_id_list = ezomero.ezimport(
             self.conn,
             file_name,

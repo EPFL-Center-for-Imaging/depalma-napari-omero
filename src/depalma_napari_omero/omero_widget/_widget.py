@@ -903,6 +903,8 @@ class OMEROWidget(QWidget):
         parent_dir = QFileDialog.getExistingDirectory(
             self, caption="Mouse scans directory"
         )
+        if parent_dir == "":
+            return
         subfolders = [f.path for f in os.scandir(parent_dir) if f.is_dir()]
         n_datasets_to_upload = len(subfolders)
         worker = self._upload_new_scans_worker(parent_dir)

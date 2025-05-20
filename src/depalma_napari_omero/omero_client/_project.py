@@ -790,7 +790,7 @@ class OmeroProjectManager:
         )
 
         rois_timeseries_list = []
-        lungs_timeseries_list = []
+        # lungs_timeseries_list = []
         for roi_id in roi_timeseries_ids:
             print(f"Downloading roi (ID={roi_id})")
             image = self.omero_client.download_image(roi_id)
