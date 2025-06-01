@@ -850,8 +850,13 @@ class OmeroProjectManager:
             )
 
     def download_all_cases(self, save_dir):
+        experiment_dir = Path(save_dir) / self.name
+        if not experiment_dir.exists():
+            os.makedirs(experiment_dir)
+            print("Created the output folder: ", experiment_dir)
+        
         for k, case in enumerate(self.cases):
-            self.download_case(case, save_dir)
+            self.download_case(case, experiment_dir)
             yield k
 
     def save_merged_csv(self, save_dir):
@@ -870,7 +875,11 @@ class OmeroProjectManager:
             df_specimen["Mouse_ID"] = specimen_name
             all_dfs.append(df_specimen)
 
+        if len(all_dfs) == 0:
+            return
+        
         merged_df = pd.concat(all_dfs, ignore_index=True)
+
         if "Unnamed: 0" in merged_df.columns:
             merged_df = merged_df.drop(columns=["Unnamed: 0"])
         columns = ["Mouse_ID"] + [col for col in merged_df.columns if col != "Mouse_ID"]

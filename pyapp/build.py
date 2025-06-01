@@ -19,12 +19,12 @@ if os.name == 'nt':
     print("Building for Windows.")
     extension = '.exe'  # Windows
     platform = 'w64'
-    os.environ['PYAPP_PROJECT_DEPENDENCY_FILE'] = str((script_directory / 'requirements.w64.txt').resolve())
+    os.environ['PYAPP_PROJECT_DEPENDENCY_FILE'] = str((script_directory / 'requirements.template-windows.txt').resolve())
 else:
     print("Building for Linux / MacOS.")
     extension = ''  # Linux and MacOS
     platform = 'u64'
-    os.environ['PYAPP_PROJECT_DEPENDENCY_FILE'] = str((script_directory / 'requirements.txt').resolve())
+    os.environ['PYAPP_PROJECT_DEPENDENCY_FILE'] = str((script_directory / 'requirements.template-linux.txt').resolve())
 
 # Print them
 print(f"{os.environ['PYAPP_PROJECT_NAME']=}")
