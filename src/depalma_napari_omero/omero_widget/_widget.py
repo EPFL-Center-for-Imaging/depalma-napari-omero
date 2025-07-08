@@ -1,14 +1,13 @@
 import os
-
 import numpy as np
-from mousetumorpy import (  # Eventually this dependency should be removed from here
+from mousetumorpy import (
     NNUNET_MODELS, YOLO_MODELS, combine_images,
     generate_tracked_tumors, initialize_df, to_linkage_df)
 from napari.layers import Image, Labels
 from napari.qt.threading import thread_worker
 from napari.utils import DirectLabelColormap
 from napari.utils.notifications import show_error, show_info, show_warning
-from napari_toolkit.containers import setup_vcollapsiblegroupbox
+from napari_toolkit.containers.collapsible_groupbox import QCollapsibleGroupBox
 from napari_toolkit.widgets import setup_colorpicker
 from PyQt5.QtCore import Qt
 from qtpy.QtWidgets import (QComboBox, QFileDialog, QGridLayout, QLabel,
@@ -52,21 +51,16 @@ class OMEROWidget(QWidget):
         ### Main layout
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignTop)
-        qwidget = QWidget(self)
-        layout.addWidget(qwidget)
-
+        
         ### Login
         login_layout = QGridLayout()
         login_layout.setContentsMargins(10, 10, 10, 10)
         login_layout.setAlignment(Qt.AlignTop)
 
-        omero_groupbox, omero_container = setup_vcollapsiblegroupbox(
-            None, "OMERO server", collapsed=True
-        )
-
-        grid_widget = QWidget()
-        omero_layout = QGridLayout(grid_widget)
-        omero_container.addWidget(grid_widget)
+        omero_groupbox = QCollapsibleGroupBox("OMERO server")
+        omero_groupbox.setChecked(False)
+        omero_groupbox.toggled.connect(self.on_groupbox_toggled)
+        omero_layout = QGridLayout(omero_groupbox)
 
         # Omero server address
         omero_layout.addWidget(QLabel("URL", self), 0, 0)
@@ -136,12 +130,10 @@ class OMEROWidget(QWidget):
         select_layout.setAlignment(Qt.AlignTop)
 
         # Experiment group
-        experiment_group, experiment_container = setup_vcollapsiblegroupbox(
-            None, "Experiment", collapsed=False
-        )
-        grid_widget = QWidget()
-        experiment_layout = QGridLayout(grid_widget)
-        experiment_container.addWidget(grid_widget)
+        experiment_group = QCollapsibleGroupBox("Experiment")
+        experiment_group.setChecked(True)
+        experiment_group.toggled.connect(self.on_groupbox_toggled)
+        experiment_layout = QGridLayout(experiment_group)
         select_layout.addWidget(experiment_group, 0, 0)
 
         # Project (experiment)
@@ -184,12 +176,10 @@ class OMEROWidget(QWidget):
         experiment_layout.addWidget(self.btn_run_workflows, 5, 0, 1, 3)
 
         # Scan data group
-        scan_data_group, scan_data_container = setup_vcollapsiblegroupbox(
-            None, "Scan data", collapsed=False
-        )
-        grid_widget = QWidget()
-        scan_data_layout = QGridLayout(grid_widget)
-        scan_data_container.addWidget(grid_widget)
+        scan_data_group = QCollapsibleGroupBox("Scan data")
+        scan_data_group.setChecked(True)
+        scan_data_group.toggled.connect(self.on_groupbox_toggled)
+        scan_data_layout = QGridLayout(scan_data_group)
         select_layout.addWidget(scan_data_group, 1, 0)
 
         # Specimens
@@ -225,13 +215,11 @@ class OMEROWidget(QWidget):
         scan_data_layout.addWidget(btn_upload_corrections, 5, 0, 1, 2)
 
         # Tracking group
-        timeseries_group, timeseries_container = setup_vcollapsiblegroupbox(
-            None, "Time series", collapsed=False
-        )
-        grid_widget = QWidget()
-        timeseries_layout = QGridLayout(grid_widget)
-        timeseries_container.addWidget(grid_widget)
-        select_layout.addWidget(timeseries_group, 2, 0)
+        self.timeseries_group = QCollapsibleGroupBox("Time series")
+        self.timeseries_group.setChecked(False)
+        self.timeseries_group.toggled.connect(self.on_groupbox_toggled)
+        timeseries_layout = QGridLayout(self.timeseries_group)
+        select_layout.addWidget(self.timeseries_group, 2, 0)
 
         timeseries_layout.addWidget(QLabel("Selected case:", self), 0, 0)
         self.label_selected_case_value = QLabel("-", self)
@@ -313,13 +301,13 @@ class OMEROWidget(QWidget):
         ### Tabs
         tab1 = QWidget(self)
         tab1.setLayout(login_layout)
-        tab2 = QWidget(self)
-        tab2.setLayout(select_layout)
+        self.tab2 = QWidget(self)
+        self.tab2.setLayout(select_layout)
         tab3 = QWidget(self)
         tab3.setLayout(generic_upload_layout)
         self.tabs = QTabWidget()
         self.tabs.addTab(tab1, "Login")
-        self.tabs.addTab(tab2, "Data selection")
+        self.tabs.addTab(self.tab2, "Data selection")
         self.tabs.addTab(tab3, "Download / Upload")
         layout.addWidget(self.tabs)
 
@@ -331,12 +319,16 @@ class OMEROWidget(QWidget):
         self.viewer.layers.events.removed.connect(self._on_layer_change)
         self._on_layer_change(None)
 
-        self.worker_manager = WorkerManager(grayout_ui_list=[tab2, tab3])
+        self.worker_manager = WorkerManager(grayout_ui_list=[self.tab2, tab3])
 
         cancel_btn = self.worker_manager.cancel_btn
         layout.addWidget(cancel_btn)
         pbar = self.worker_manager.pbar
         layout.addWidget(pbar)
+
+    def on_groupbox_toggled(self, checked: bool):
+        """Invalidate the (parent) dock widget's minimum size so that the layout can be shrunk fully on groupbox collapse."""
+        self.parentWidget().setMinimumSize(0, 0)
 
     @property
     def project(self):
