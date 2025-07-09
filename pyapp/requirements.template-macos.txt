@@ -1,0 +1,2 @@
+https://github.com/glencoesoftware/zeroc-ice-py-macos-universal2/releases/download/20240131/zeroc_ice-3.6.5-cp310-cp310-macosx_11_0_universal2.whl
+depalma-napari-omero==${PYAPP_PROJECT_VERSION}
