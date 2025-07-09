@@ -28,7 +28,7 @@ dependencies = [
     "napari-label-focus>=0.1.4",
     "napari-remove-objects",
     "napari-adaptive-painting",
-    "imaging-server-kit>=0.0.8",
+    "imaging-server-kit>=0.0.16",
     "mousetumorpy>=0.0.2",
     "napari-mousetumorpy",
 ]

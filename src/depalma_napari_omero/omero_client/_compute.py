@@ -161,7 +161,14 @@ class MouseTumorComputeServer(AlgorithmServer):
                 image_id, roi_timeseries_ids, tumor_timeseries_ids
             )
 
-        return [("Workflow completed!", {"status": status_code}, "text")]
+        if status_code == 2:
+            notif_text = "Workflow completed!"
+            info_level = "info"
+        else:
+            notif_text = "An error occured in this workflow."
+            info_level = "error"
+
+        return [(notif_text, {"level": info_level}, "notification")]
 
     def _compute_roi(
         self, model, posted_image_name, image_id, dataset_id, project_id
