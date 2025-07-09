@@ -100,7 +100,7 @@ jobs:
             tar -czvf ../../../../executable-windows.tar.gz $EXECUTABLE_NAME
           elif [ "${{ matrix.os }}" == "macos-latest" ]; then
             EXECUTABLE_NAME=${{ env.PYAPP_PROJECT_NAME }}_${{ runner.os }}_${{ env.VERSION }}
-            mv pyapp.exe $EXECUTABLE_NAME
+            mv pyapp $EXECUTABLE_NAME
             tar -czvf ../../../../executable-macos.tar.gz $EXECUTABLE_NAME
           fi
 
