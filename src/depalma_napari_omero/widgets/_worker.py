@@ -15,7 +15,7 @@ class WorkerManager:
         self.cancel_btn.clicked.connect(self._handle_cancel)
         
         # Progress bar
-        self.pbar = QProgressBar(minimum=0, maximum=1)
+        self.pbar = QProgressBar(minimum=0, maximum=1) # type: ignore
 
     @property
     def n_active(self):

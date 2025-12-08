@@ -1,5 +1,5 @@
 import napari
-from depalma_napari_omero.omero_widget import OMEROWidget
+from depalma_napari_omero.widgets import OMEROWidget
 from depalma_napari_omero import __version__
 
 if __name__ == "__main__":

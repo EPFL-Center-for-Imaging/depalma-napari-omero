@@ -1,0 +1,1 @@
+from depalma_napari_omero.widgets._widget import OMEROWidget
