@@ -29,7 +29,7 @@ class WorkerManager:
             worker.yielded.connect(lambda step: self.update_pbar(step))
         self.active_workers.append(worker)
         self.pbar.setMaximum(max_iter)
-        self.pbar.setValue(0)
+        self.update_pbar(0)
         self._grayout_ui()
         worker.start()
 
@@ -45,12 +45,16 @@ class WorkerManager:
             ui_element.setEnabled(True)
 
     def worker_stopped(self):
-        self._ungrayout_ui()
-        self.pbar.setMaximum(1)
-        self.active_workers.clear()
+        if self.n_active <= 1:
+            self._ungrayout_ui()
+            self.pbar.setMaximum(1)
+            self.clear()
+        else:
+            self.active_workers.pop(0)
+            
 
     def _handle_cancel(self):
-        if len(self.active_workers) == 0:
+        if self.n_active == 0:
             show_warning("Nothing to cancel.")
 
         for worker in self.active_workers:
