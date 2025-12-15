@@ -118,11 +118,9 @@ class ProjectScanner:
                 specimen_tags = TagsProcessor.get_specimen_tags(image_tags)
                 if len(specimen_tags) == 0:
                     specimen_tag = None
-                elif len(specimen_tags) > 1:
-                    raise RuntimeError(
-                        f"Multiple specimen name tags found: {specimen_tags} among {image_tags} ({image_id=})"
-                    )
-                else:
+                elif len(specimen_tags) >= 1:
+                    if len(specimen_tags) > 1:
+                        print(f"Multiple specimen name tags found: {specimen_tags} among {image_tags} ({image_id=}). Will use: {specimen_tags[0]}")
                     specimen_tag = specimen_tags[0]
 
                 # Process time tags
@@ -130,11 +128,9 @@ class ProjectScanner:
                 if len(time_tags) == 0:
                     time_idx = None
                     time_tag = None
-                elif len(time_tags) > 1:
-                    raise RuntimeError(
-                        f"Incoherent scan times: {time_tags} ({image_id=})"
-                    )
-                else:
+                elif len(time_tags) >= 1:
+                    if len(time_tags) > 1:
+                        print(f"Incoherent scan times: {time_tags} ({image_id=}). Will use: {time_tags[0]}.")
                     time_tag = time_tags[0]
                     time_idx = TagsProcessor.get_scan_time_idx(time_tag)
 
