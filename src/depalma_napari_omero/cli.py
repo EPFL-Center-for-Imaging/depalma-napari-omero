@@ -76,7 +76,7 @@ def project_menu(project: OmeroProjectManager) -> str:
 
     if selected_option == "run_workflows":
         clear_screen()
-        if len(project.scanner.view.roi_missing) | len(project.scanner.view.pred_missing): # type: ignore
+        if len(project.scanner.view.roi_missing) or len(project.scanner.view.pred_missing): # type: ignore
             if len(project.scanner.view.roi_missing) != 0: # type: ignore
                 lungs_model = questionary.select(
                     "Lungs detection model",
@@ -203,7 +203,7 @@ def run_all_workflows(
 
     project.scanner.view.print_summary()
 
-    if len(project.scanner.view.roi_missing) | len(project.scanner.view.pred_missing): # type: ignore
+    if len(project.scanner.view.roi_missing) or len(project.scanner.view.pred_missing): # type: ignore
         if len(project.scanner.view.roi_missing): # type: ignore
             project.batch_roi(lungs_model, ask_confirm=False)
         project.batch_nnunet(tumor_model, ask_confirm=False)

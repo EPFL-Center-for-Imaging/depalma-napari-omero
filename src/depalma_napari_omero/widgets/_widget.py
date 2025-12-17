@@ -142,14 +142,14 @@ class OMEROWidget(QWidget):
         experiment_layout.addWidget(self.btn_run_workflows, 3, 0, 1, 3)
 
         # Upload new scans
-        self.btn_run_workflows = QPushButton("⬆️ Upload new scans", self)
-        self.btn_run_workflows.clicked.connect(self._upload_new_scans) # type: ignore
-        experiment_layout.addWidget(self.btn_run_workflows, 4, 0, 1, 3)
+        self.btn_upload_scans = QPushButton("⬆️ Upload new scans", self)
+        self.btn_upload_scans.clicked.connect(self._upload_new_scans) # type: ignore
+        experiment_layout.addWidget(self.btn_upload_scans, 4, 0, 1, 3)
 
         # Download experiment
-        self.btn_run_workflows = QPushButton("⬇️ Download project", self)
-        self.btn_run_workflows.clicked.connect(self._download_experiment) # type: ignore
-        experiment_layout.addWidget(self.btn_run_workflows, 5, 0, 1, 3)
+        self.btn_download_experiments = QPushButton("⬇️ Download project", self)
+        self.btn_download_experiments.clicked.connect(self._download_experiment) # type: ignore
+        experiment_layout.addWidget(self.btn_download_experiments, 5, 0, 1, 3)
 
         # Scan data group
         scan_data_group = QCollapsibleGroupBox("Scan data")  # type: ignore
@@ -254,13 +254,13 @@ class OMEROWidget(QWidget):
         ### Tabs
         tab1 = QWidget(self)
         tab1.setLayout(login_layout)
-        self.tab2 = QWidget(self)
-        self.tab2.setLayout(select_layout)
+        tab2 = QWidget(self)
+        tab2.setLayout(select_layout)
         tab3 = QWidget(self)
         tab3.setLayout(generic_upload_layout)
         self.tabs = QTabWidget()
         self.tabs.addTab(tab1, "Login")
-        self.tabs.addTab(self.tab2, "Data selection")
+        self.tabs.addTab(tab2, "Data selection")
         self.tabs.addTab(tab3, "Download / Upload")
         layout.addWidget(self.tabs)
 
@@ -272,7 +272,7 @@ class OMEROWidget(QWidget):
         self.viewer.layers.events.removed.connect(self._on_layer_change)
         self._on_layer_change(None)
 
-        self.worker_manager = WorkerManager(grayout_ui_list=[self.tab2, tab3])
+        self.worker_manager = WorkerManager(grayout_ui_list=[tab2, tab3])
 
         cancel_btn = self.worker_manager.cancel_btn
         layout.addWidget(cancel_btn)
@@ -308,7 +308,7 @@ class OMEROWidget(QWidget):
     def _on_layer_change(self, e):
         self.cb_upload_generic.clear()
         for x in self.viewer.layers:
-            if isinstance(x, Labels) | isinstance(x, Image):
+            if isinstance(x, Labels) or isinstance(x, Image):
                 self.cb_upload_generic.addItem(x.name, x.data)
 
         self.cb_upload.clear()
@@ -346,7 +346,11 @@ class OMEROWidget(QWidget):
         if selected_dataset == "":
             return
 
-        dataset_id = int(self.cb_dataset.currentData())
+        dataset_data = self.cb_dataset.currentData()
+        if dataset_data is None:
+            show_warning("No dataset selected!")
+            return
+        dataset_id = int(dataset_data)
 
         titles, image_ids = self.view.cb_dataset_image_data(dataset_id)
 
@@ -355,7 +359,10 @@ class OMEROWidget(QWidget):
             self.cb_download_generic.addItem(title, image_id)
 
     def _on_project_change(self, selected_project: str):
-        """On project change, create a new ProjectRepresentation object."""        
+        project_data = self.cb_project.currentData()
+        if project_data is None:
+            return
+        project_id = int(project_data)
         if selected_project in ["", "Select from list"]:
             return
 
@@ -619,7 +626,11 @@ class OMEROWidget(QWidget):
         else:
             updated_data = layer.data
 
-        dataset_id = int(self.cb_dataset.currentData())
+        dataset_data = self.cb_dataset.currentData()
+        if dataset_data is None:
+            show_warning("No dataset selected!")
+            return
+        dataset_id = int(dataset_data)
 
         image_ctx = ImageContext(
             image_class="unknown",
@@ -860,13 +871,14 @@ class OMEROWidget(QWidget):
             return
         
         save_path = Path(save_dir).resolve()
-
+        
         for k in self.project.download_all_cases(save_path):
             yield k + 1
 
         # Also save all tracking results in a single CSV
-        out_csv_path = save_path / f"Project_{self.project.id}_tracking_results.csv"
-        utils.save_merged_csv(save_path, out_csv_path)
+        project_dir = save_path / self.project.name
+        out_csv_path = project_dir / f"Project_{self.project.id}_tracking_results.csv"
+        utils.save_merged_csv(project_dir, out_csv_path)
         show_info(f"Saved {out_csv_path}")
 
     def _download_experiment(self, *args, **kwargs):
