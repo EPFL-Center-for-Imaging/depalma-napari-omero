@@ -258,13 +258,17 @@ class OmeroProjectManager:
         ctx = self.get_specimen_context(specimen)
 
         # Download the image ROIs
-        roi_images = []
-        for roi_id in ctx.roi_series:
-            print(f"Downloading roi (ID={roi_id})")
-            image = self.client.download_image(roi_id)
-            roi_images.append(image)
-        rois_timeseries = combine_images(roi_images)
-        skimage.io.imsave(str(out_dir / "rois_timeseries.tif"), rois_timeseries)
+        roi_out_file = out_dir / "rois_timeseries.tif"
+        if not roi_out_file.exists():
+            roi_images = []
+            for roi_id in ctx.roi_series:
+                print(f"Downloading roi (ID={roi_id})")
+                image = self.client.download_image(roi_id)
+                roi_images.append(image)
+            rois_timeseries = combine_images(roi_images)
+            skimage.io.imsave(str(roi_out_file), rois_timeseries)
+        else:
+            print(f"Already exists: {roi_out_file}")
 
         # Download the lungs
         # lungs_timeseries_list = []
@@ -279,23 +283,31 @@ class OmeroProjectManager:
         # )
 
         # Download the tumors
-        tumor_images = []
-        for tumor_id in ctx.tumor_series:
-            print(f"Downloading tumor mask (ID={tumor_id})")
-            tumor = self.client.download_image(tumor_id)
-            tumor_images.append(tumor)
-        tumor_timeseries = combine_images(tumor_images)
-        skimage.io.imsave(str(out_dir / "tumors_untracked.tif"), tumor_timeseries)
+        tumor_out_file = out_dir / "tumors_untracked.tif"
+        if not tumor_out_file.exists():
+            tumor_images = []
+            for tumor_id in ctx.tumor_series:
+                print(f"Downloading tumor mask (ID={tumor_id})")
+                tumor = self.client.download_image(tumor_id)
+                tumor_images.append(tumor)
+            tumor_timeseries = combine_images(tumor_images)
+            skimage.io.imsave(str(tumor_out_file), tumor_timeseries)
+        else:
+            print(f"Already exists: {tumor_out_file}")
 
         # Download the tracked tumors
         if ctx.tracking_table_id is not None:
-            formatted_df = self.client.get_table(ctx.tracking_table_id)
-            linkage_df = to_linkage_df(formatted_df)
-            tumor_series_tracked = generate_tracked_tumors(tumor_timeseries, linkage_df)
+            ts_out_file = out_dir / "tumors_tracked.tif"
+            if not ts_out_file.exists():
+                formatted_df = self.client.get_table(ctx.tracking_table_id)
+                linkage_df = to_linkage_df(formatted_df)
+                tumor_series_tracked = generate_tracked_tumors(tumor_timeseries, linkage_df)
 
-            # Save the tracked tumors and CSV file
-            skimage.io.imsave(str(out_dir / "tumors_tracked.tif"), tumor_series_tracked)
-            formatted_df.to_csv(str(out_dir / f"{specimen}_results.csv"))
+                # Save the tracked tumors and CSV file
+                skimage.io.imsave(str(ts_out_file), tumor_series_tracked)
+                formatted_df.to_csv(str(out_dir / f"{specimen}_results.csv"))
+            else:
+                print(f"Already exists: {ts_out_file}")
 
     def download_all_cases(self, out_dir: Path):
         project_dir = out_dir / self.name
