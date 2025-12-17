@@ -15,18 +15,15 @@ def save_merged_csv(out_dir: Path, out_csv_path: Path) -> None:
         if TagsProcessor.get_specimen_tags([specimen]) is None:
             raise ValueError(f"Specimen name {specimen} does not comply with naming convention (C*****).")
 
-        df_specimen = pd.read_csv(csv_file)
+        df_specimen = pd.read_csv(csv_file, index_col=0)
         df_specimen["Mouse_ID"] = specimen
         all_dfs.append(df_specimen)
 
     if len(all_dfs) == 0:
         return
-
+    
     merged_df = pd.concat(all_dfs, ignore_index=True)
 
-    if "Unnamed: 0" in merged_df.columns:
-        merged_df = merged_df.drop(columns=["Unnamed: 0"])
-    
     columns = ["Mouse_ID"] + [col for col in merged_df.columns if col != "Mouse_ID"]
     merged_df = merged_df[columns]
     merged_df.to_csv(out_csv_path)
