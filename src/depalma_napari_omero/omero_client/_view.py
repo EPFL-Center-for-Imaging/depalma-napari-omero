@@ -105,6 +105,17 @@ class ProjectDataView:
     def __init__(self, image_contexts: List[ImageContext]):
         self.all_categories = ["image", "roi", "raw_pred", "corrected_pred"]
 
+        columns = [
+            "dataset_id",
+            "dataset_name",
+            "image_id",
+            "image_name",
+            "specimen",
+            "time",
+            "time_tag",
+            "class",
+        ]
+
         self.df_all = pd.DataFrame(
             [
                 {
@@ -118,9 +129,10 @@ class ProjectDataView:
                     "class": ctx.image_class,
                 }
                 for ctx in image_contexts
-            ]
+            ],
+            columns=columns,
         )
-
+        
         df = self.df_all[self.df_all["class"] != "other"].copy()
 
         df_other = self.df_all[self.df_all["class"] == "other"].copy()
@@ -290,9 +302,7 @@ class ProjectDataView:
             & (self.df["class"].isin(["corrected_pred", "raw_pred"]))
         ][["image_id", "time", "class"]]
 
-        labels_img_ids = (
-            labels_img_ids.groupby("time").apply(filter_group).reset_index(drop=True)
-        )
+        labels_img_ids = labels_img_ids.groupby("time")[labels_img_ids.columns].apply(filter_group).reset_index(drop=True)
 
         labels_img_ids = pd.merge(
             roi_img_ids,
