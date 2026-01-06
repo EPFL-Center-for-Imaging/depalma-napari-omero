@@ -238,7 +238,7 @@ class ProjectDataView:
 
         if self.report_data.n_images_other > 0:
             print(
-                f"  - {self.report_data.n_images_other} files couldn't be identified as one of {self.report_data.all_categories}."
+                f"  - {self.report_data.n_images_other} files couldn't be identified as one of {self.report_data.all_categories} and will be ignored."
             )
 
         if len(self.report_data.corr_missing_ids) > 0:
@@ -252,13 +252,13 @@ class ProjectDataView:
 
         if len(self.report_data.anomalous_multi_image) > 0:
             print(
-                f"  - {len(self.report_data.anomalous_multi_image)} specimen-time combinations have multiple matching `image` files."
+                f"  - {len(self.report_data.anomalous_multi_image)} specimen-time combinations have multiple matching `image` files and will be ignored."
             )
             print(f"    Occured for: {self.report_data.anomalous_multi_image}")
 
         if len(self.report_data.anomalous_image_missing) > 0:
             print(
-                f"  - {len(self.report_data.anomalous_image_missing)} specimen-time combinations have no matching `image` files."
+                f"  - {len(self.report_data.anomalous_image_missing)} specimen-time combinations have no matching `image` files and will be ignored."
             )
             print(f"    Occured for: {self.report_data.anomalous_image_missing}")
 
