@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 import numpy as np
+import pandas as pd
 import skimage.io
 from mousetumorpy import (
     NNUNET_MODELS,
@@ -206,10 +207,17 @@ class OmeroProjectManager:
 
                 # Skip if there is only one time point
                 if ctx.n_labels < 2:
+                    print(f"⚠️ Only one time point is available. Skipping tracking for this case: {specimen}.")
                     continue
 
                 # Skip if there is already a table attachment
                 if ctx.tracking_table_id is not None:
+                    print(f"⚠️ Tracking table already exists (Table ID: {ctx.tracking_table_id}). Case: {specimen}. Skipping...")
+                    continue
+                
+                # Skip if the tumor series IDs have NaN values
+                if pd.isna(ctx.tumor_series).sum() > 0:
+                    print(f"⚠️ Tumor series IDs has NaN values; tumors weren't computed in all scans? Skipping tracking for this case: {specimen}...")
                     continue
 
                 _compute_tracking(
@@ -286,7 +294,11 @@ class OmeroProjectManager:
         tumor_out_file = out_dir / "tumors_untracked.tif"
         if not tumor_out_file.exists():
             tumor_images = []
-            for tumor_id in ctx.tumor_series:
+            # Tumor series can have pandas NaNs in it... here, we ignore them
+            valid_tumor_series_ids = [v for v in ctx.tumor_series if pd.notna(v)]
+            if pd.isna(ctx.tumor_series).sum() > 0:
+                print(f"⚠️ Tumor series IDs has NaN values; ignoring them (tumors weren't computed in all scans?).")
+            for tumor_id in valid_tumor_series_ids:
                 print(f"Downloading tumor mask (ID={tumor_id})")
                 tumor = self.client.download_image(tumor_id)
                 tumor_images.append(tumor)
@@ -322,11 +334,11 @@ class OmeroProjectManager:
     def get_specimen_context(self, specimen: str) -> SpecimenContext:
         roi_series, tumor_series = self.scanner.view.tumor_timeseries_ids(specimen)
         n_rois = len(roi_series)
-        n_nan_labels = np.isnan(tumor_series).any().sum()
+        n_nan_labels = pd.isna(tumor_series).sum()
         n_labels = len(tumor_series) - n_nan_labels
 
         n_lungs = 0
-        for roi_id in roi_series:  # Referes to the omero rois (it's confusing..)
+        for roi_id in roi_series:  # Refers to the omero rois (it's confusing..)
             ome_roi_ids = self.client.get_image_rois(roi_id)
             if len(ome_roi_ids) == 1:
                 n_lungs += 1  # TODO: correct logic?

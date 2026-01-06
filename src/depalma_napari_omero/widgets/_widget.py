@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 import numpy as np
+import pandas as pd
 from mousetumorpy import (
     NNUNET_MODELS,
     YOLO_MODELS,
@@ -813,8 +814,11 @@ class OMEROWidget(QWidget):
             show_warning("No data to download.")
             return
 
+        valid_tumor_series_ids = [v for v in specimen_ctx.tumor_series if pd.notna(v)]
+        if pd.isna(specimen_ctx.tumor_series).sum() > 0:
+            print(f"⚠️ Tumor series IDs has NaN values; ignoring them (tumors weren't computed in all scans?).")
         worker = self._download_timeseries_worker(
-            specimen_ctx.tumor_series, specimen_ctx.name # type: ignore
+            valid_tumor_series_ids, specimen_ctx.name # type: ignore
         )
         worker.returned.connect(self._download_untracked_tumors_returned) # type: ignore
         self.worker_manager.add_active(worker, max_iter=specimen_ctx.n_labels)
@@ -838,7 +842,10 @@ class OMEROWidget(QWidget):
 
         table_id = specimen_ctx.tracking_table_id
 
-        worker = self._download_tracked_tumors_worker(specimen_ctx.tumor_series, specimen, table_id) # type: ignore
+        valid_tumor_series_ids = [v for v in specimen_ctx.tumor_series if pd.notna(v)]
+        if pd.isna(specimen_ctx.tumor_series).sum() > 0:
+            print(f"⚠️ Tumor series IDs has NaN values; ignoring them (tumors weren't computed in all scans?).")
+        worker = self._download_tracked_tumors_worker(valid_tumor_series_ids, specimen, table_id) # type: ignore
         worker.returned.connect(self._download_tracked_tumors_returned) # type: ignore
         self.worker_manager.add_active(worker, max_iter=specimen_ctx.n_tracked)
 

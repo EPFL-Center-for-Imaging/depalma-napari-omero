@@ -232,36 +232,35 @@ class ProjectDataView:
         print("\n" + "=" * 60)
         print(f"📊 Project Summary")
         print("=" * 60)
-        print(f"🐭 Number of cases:      {self.report_data.n_specimens}")
+        print(f"🐭 Cases identified:      {self.report_data.n_specimens}")
         print(f"🕒 Scan times:           {self.report_data.n_times}")
         print("\n⚠️  Warnings:")
 
         if self.report_data.n_images_other > 0:
             print(
-                f"  - {self.report_data.n_images_other} file(s) couldn't be reliably tagged in {self.report_data.all_categories}."
+                f"  - {self.report_data.n_images_other} files couldn't be identified as one of {self.report_data.all_categories}."
             )
-            print(f"    Added to the `Other files` list.")
 
         if len(self.report_data.corr_missing_ids) > 0:
             corrections_missing_ids = ", ".join(
                 map(str, self.report_data.corr_missing_ids)
             )
             print(
-                f"  - {len(self.report_data.corr_missing_ids)} corrected masks missing for image IDs:"
+                f"  - {len(self.report_data.corr_missing_ids)} corrected masks are missing for the image IDs:"
             )
             print(f"    {corrections_missing_ids}")
 
         if len(self.report_data.anomalous_multi_image) > 0:
             print(
-                f"  - {len(self.report_data.anomalous_multi_image)} specimen-time combinations with multiple matching `image` files."
+                f"  - {len(self.report_data.anomalous_multi_image)} specimen-time combinations have multiple matching `image` files."
             )
-            print(f"    Concerns specimens: {self.report_data.anomalous_multi_image}")
+            print(f"    Occured for: {self.report_data.anomalous_multi_image}")
 
         if len(self.report_data.anomalous_image_missing) > 0:
             print(
-                f"  - {len(self.report_data.anomalous_image_missing)} specimen-time combinations had no matching `image` files."
+                f"  - {len(self.report_data.anomalous_image_missing)} specimen-time combinations have no matching `image` files."
             )
-            print(f"    Concerns specimens: {self.report_data.anomalous_image_missing}")
+            print(f"    Occured for: {self.report_data.anomalous_image_missing}")
 
         if all(
             [
@@ -315,8 +314,8 @@ class ProjectDataView:
         labels_img_ids.sort_values(by="time", ascending=True, inplace=True)
 
         return (
-            labels_img_ids["image_id_rois"].tolist(),
-            labels_img_ids["image_id_labels"].tolist(),
+            labels_img_ids["image_id_rois"].astype("Int64").tolist(),
+            labels_img_ids["image_id_labels"].astype("Int64").tolist(),
         )
 
     def specimen_times(self, specimen_name: str) -> List[str]:

@@ -52,6 +52,8 @@ class ProjectScanner:
                     pbar.update(1)
                     k += 1
                     yield k
+        
+        self.view.print_summary()
 
     def upload_image(self, image_ctx: ImageContext, image_tag_id: int):
         if image_ctx.project_id is None:
