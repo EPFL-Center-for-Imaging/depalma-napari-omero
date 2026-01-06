@@ -276,8 +276,9 @@ class ProjectDataView:
         ):
             print("  - No issues found 🎉")
         else:
-            print("\n➡️ OMERO files that were ignored (you may want to check them):")
-            print(self.report_data.other_files)
+            if len(self.report_data.other_files) > 0:
+                print("\n➡️ OMERO files that were ignored (you may want to check them):")
+                print(self.report_data.other_files)
 
         print("=" * 60 + "\n")
 

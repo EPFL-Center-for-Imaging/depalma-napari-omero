@@ -461,7 +461,7 @@ class OMEROWidget(QWidget):
             image_name=image_name,
         )
 
-        show_info(f"Downloading {image_ctx.image_id=} ({image_ctx.image_class})")
+        show_info(f"Downloading Image ID={image_ctx.image_id} ({image_ctx.image_class})")
         worker = self._download_worker(image_ctx) # type: ignore
         worker.returned.connect(self._download_selected_returned)
         self.worker_manager.add_active(worker)
@@ -493,7 +493,7 @@ class OMEROWidget(QWidget):
         if image_ctx.image_id is None:
             raise RuntimeError("ID required to download image.")
 
-        show_info(f"Downloading {image_ctx.image_id=}")
+        show_info(f"Downloading Image ID={image_ctx.image_id}")
 
         worker = self._download_worker(image_ctx) # type: ignore
         worker.returned.connect(self._download_selected_returned)
