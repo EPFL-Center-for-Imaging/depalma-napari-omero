@@ -146,6 +146,8 @@ class ProjectScanner:
                     image_class = "corrected_pred"
                 elif len(TagsProcessor.get_raw_pred_tags(image_tags)) >= 1:
                     image_class = "raw_pred"
+                elif "overview" in image_tags:
+                    image_class = "overview"
 
                 yield ImageContext(
                     dataset_id=dataset_id,

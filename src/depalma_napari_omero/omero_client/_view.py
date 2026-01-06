@@ -11,7 +11,7 @@ from depalma_napari_omero.omero_client._context import ImageContext
 class ReportData:
     n_specimens: int
     n_times: int
-    n_images_other: int
+    other_files: pd.DataFrame
     all_categories: List[str]
     corr_missing_ids: List[int]
     anomalous_multi_image: List[str]
@@ -103,7 +103,7 @@ def _find_corr_missing(df: pd.DataFrame, df_summary: pd.DataFrame):
 
 class ProjectDataView:
     def __init__(self, image_contexts: List[ImageContext]):
-        self.all_categories = ["image", "roi", "raw_pred", "corrected_pred"]
+        self.all_categories = ["image", "roi", "raw_pred", "corrected_pred", "overview"]
 
         columns = [
             "dataset_id",
@@ -136,7 +136,7 @@ class ProjectDataView:
         df = self.df_all[self.df_all["class"] != "other"].copy()
 
         df_other = self.df_all[self.df_all["class"] == "other"].copy()
-
+        
         df_summary = self._construct_df_summary(df)
 
         # Remove rows with an image missing
@@ -170,7 +170,7 @@ class ProjectDataView:
         self.report_data = ReportData(
             n_specimens=self.df["specimen"].nunique(),
             n_times=self.df["time"].nunique(),
-            n_images_other=len(df_other),
+            other_files=df_other,
             all_categories=self.all_categories,
             corr_missing_ids=[
                 ctx.image_id for ctx in self.corr_missing if ctx.image_id is not None
@@ -232,23 +232,27 @@ class ProjectDataView:
         print("\n" + "=" * 60)
         print(f"📊 Project Summary")
         print("=" * 60)
-        print(f"🐭 Cases identified:      {self.report_data.n_specimens}")
+        print(f"🐭 Cases identified:     {self.report_data.n_specimens}")
         print(f"🕒 Scan times:           {self.report_data.n_times}")
-        print("\n⚠️  Warnings:")
+        print("\n⚠️ Warnings:")
 
-        if self.report_data.n_images_other > 0:
+        n_images_other = len(self.report_data.other_files)
+        if n_images_other > 0:
             print(
-                f"  - {self.report_data.n_images_other} files couldn't be identified as one of {self.report_data.all_categories} and will be ignored."
+                f"  - {n_images_other} files couldn't be identified as one of {self.report_data.all_categories} and will be ignored."
             )
 
         if len(self.report_data.corr_missing_ids) > 0:
-            corrections_missing_ids = ", ".join(
-                map(str, self.report_data.corr_missing_ids)
-            )
+            if len(self.report_data.corr_missing_ids) > 5:
+                _ids_to_report = self.report_data.corr_missing_ids[:5]
+                corrections_missing_ids = ", ".join(map(str, _ids_to_report))
+                extra = len(self.report_data.corr_missing_ids) - 5
+                msg = f"{corrections_missing_ids} + {extra} more."
+            else:
+                msg = ", ".join(map(str, self.report_data.corr_missing_ids))
             print(
-                f"  - {len(self.report_data.corr_missing_ids)} corrected masks are missing for the image IDs:"
+                f"  - {len(self.report_data.corr_missing_ids)} corrected masks are missing for these image IDs: {msg}"
             )
-            print(f"    {corrections_missing_ids}")
 
         if len(self.report_data.anomalous_multi_image) > 0:
             print(
@@ -265,12 +269,15 @@ class ProjectDataView:
         if all(
             [
                 len(self.report_data.corr_missing_ids) == 0,
-                self.report_data.n_images_other == 0,
+                n_images_other == 0,
                 len(self.report_data.anomalous_image_missing) == 0,
                 len(self.report_data.anomalous_multi_image) == 0,
             ]
         ):
             print("  - No issues found 🎉")
+        else:
+            print("\n➡️ OMERO files that were ignored (you may want to check them):")
+            print(self.report_data.other_files)
 
         print("=" * 60 + "\n")
 
