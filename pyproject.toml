@@ -27,7 +27,7 @@ dependencies = [
     "napari-toolkit",
     "napari-adaptive-painting",
     "imaging-server-kit>=0.1.3",
-    "mousetumorpy>=0.0.3",
+    "mousetumorpy>=0.0.4",
     "napari-mousetumorpy>=0.0.3",
 ]
 
