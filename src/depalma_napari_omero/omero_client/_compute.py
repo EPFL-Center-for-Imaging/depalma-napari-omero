@@ -79,6 +79,7 @@ def _compute_nnunet(
         print(
             f"An error occured while computing the NNUNET prediction in this image: ID={image_id}."
         )
+        return
 
     posted_image_id = omero_client.import_image_to_ds(
         image_pred, project_id, dataset_id, image_name
