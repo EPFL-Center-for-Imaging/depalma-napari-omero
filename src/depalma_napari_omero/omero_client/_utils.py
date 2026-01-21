@@ -52,7 +52,7 @@ def load_ct_from_folder(image_dir: Union[str, Path]) -> ImageContext:
             f"Specimen name {specimen} does not comply with naming convention (C*****)."
         )
 
-    if not isinstance(TagsProcessor.get_scan_time_tags([scan_time])[0], int):
+    if not len(TagsProcessor.get_scan_time_tags([scan_time])) == 1:
         raise ValueError(
             f"Scan time {scan_time} does not comply with naming convention (SCAN* or T*)."
         )
