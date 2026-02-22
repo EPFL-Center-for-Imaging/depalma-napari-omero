@@ -380,8 +380,8 @@ class OMEROWidget(QWidget):
         self.btn_download_lungs_series.setText(f"⏬ (-)")
         self.btn_download_tracked_tumors.setText(f"⏬ (-)")
         self.label_selected_case_value.setText("-")
+        
         self.cb_specimen.clear()
-        self.cb_download_generic.clear()
         self.cb_scan_time.clear()
         self.cb_dataset.clear()
 
@@ -695,6 +695,17 @@ class OMEROWidget(QWidget):
         current_specimen_idx = self.cb_specimen.currentIndex()
         current_time_idx = self.cb_scan_time.currentIndex()
         current_dataset_idx = self.cb_dataset.currentIndex()
+        
+        # Update the UI (Note: same as in _on_project_change)
+        self.btn_download_roi_series.setText(f"⏬ (-)")
+        self.btn_download_untracked_tumors.setText(f"⏬ (-)")
+        self.btn_download_lungs_series.setText(f"⏬ (-)")
+        self.btn_download_tracked_tumors.setText(f"⏬ (-)")
+        self.label_selected_case_value.setText("-")
+        
+        self.cb_specimen.clear()
+        self.cb_scan_time.clear()
+        self.cb_dataset.clear()
 
         worker = self._update_project_worker()
         worker.returned.connect(lambda _: self._reset_comboboxes(current_specimen_idx, current_time_idx, current_dataset_idx))
