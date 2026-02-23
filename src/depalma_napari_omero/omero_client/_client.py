@@ -186,8 +186,8 @@ class OmeroClient:
         image_id_list = ezomero.ezimport(
             self.conn,  # type: ignore
             target=str(file_name),
-            project=project_id,
-            dataset=dataset_id,
+            project=int(project_id),
+            dataset=int(dataset_id),
         )
 
         os.unlink(file_name)
