@@ -131,7 +131,7 @@ class OmeroProjectManager:
         pred_missing_ctx: List[ImageContext] = self.scanner.view.pred_missing
 
         if len(pred_missing_ctx) == 0:
-            print("No tumor moask to compute.")
+            print("No tumor mask to compute.")
             return
 
         if ask_confirm:
