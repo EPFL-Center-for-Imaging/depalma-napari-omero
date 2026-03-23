@@ -23,10 +23,11 @@ dependencies = [
     "pooch",
     "questionary",
     "aicsimageio",
-    "napari[all]",
+    "napari[all]<0.7",
+    "PyQt5",
     "napari-toolkit",
     "napari-adaptive-painting",
-    "imaging-server-kit>=0.1.3",
+    "imaging-server-kit==0.1.3",
     "mousetumorpy>=0.0.5",
     "napari-mousetumorpy>=0.0.5",
 ]
